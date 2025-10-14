@@ -19,7 +19,21 @@ This agent:
 
 import io
 import sys
+import warnings
+import logging
 from contextlib import redirect_stdout, redirect_stderr
+
+# Suppress warnings from Google ADK and GenAI
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", message="Deprecated. Please migrate to the async method.")
+warnings.filterwarnings("ignore", message=".*there are non-text parts in the response.*")
+
+# Suppress logger warnings
+logging.getLogger('google.genai.types').setLevel(logging.ERROR)
+logging.getLogger('google.adk').setLevel(logging.ERROR)
+logging.getLogger('google.adk.tools').setLevel(logging.ERROR)
+logging.getLogger('google.adk.sessions').setLevel(logging.ERROR)
+
 from google.adk import Agent
 from google.adk.agents.remote_a2a_agent import RemoteA2aAgent
 from google.adk.tools.agent_tool import AgentTool

@@ -17,7 +17,21 @@ import io
 import sys
 import time
 import random
+import warnings
+import logging
 from contextlib import redirect_stdout, redirect_stderr
+
+# Suppress warnings from Google ADK and GenAI
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", message="Deprecated. Please migrate to the async method.")
+warnings.filterwarnings("ignore", message=".*there are non-text parts in the response.*")
+
+# Suppress logger warnings - set level and disable propagation
+for logger_name in ['google.genai.types', 'google.genai', 'google.adk', 'google.adk.tools', 'google.adk.sessions']:
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.ERROR)
+    logger.propagate = False
+
 from google.adk import Agent
 from google.adk.tools import FunctionTool
 

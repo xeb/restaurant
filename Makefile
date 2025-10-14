@@ -33,6 +33,21 @@ supplier-cli: ## Start supplier A2A server on port 8003
 	@echo "🚀 Starting supplier A2A server on port $(SUPPLIER_PORT)..."
 	@cd supplier && uv run a2a_server.py
 
+supplier-cli-dev: ## Start supplier A2A server with auto-reload (development mode)
+	@if lsof -i:$(SUPPLIER_PORT) > /dev/null 2>&1; then \
+		echo "⚠️  Port $(SUPPLIER_PORT) is already in use!"; \
+		echo ""; \
+		echo "The supplier may already be running. Check with:"; \
+		echo "  make status"; \
+		echo ""; \
+		echo "To stop existing agents:"; \
+		echo "  make stop"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@echo "🚀 Starting supplier A2A server on port $(SUPPLIER_PORT) with auto-reload..."
+	@cd supplier && uvicorn a2a_server:a2a_app --host 0.0.0.0 --port $(SUPPLIER_PORT) --reload
+
 supplier-web: ## Start supplier web interface on port 5003
 	@echo "🚀 Starting supplier web interface on port $(SUPPLIER_WEB_PORT)..."
 	@uv run webapp.py --agent=supplier --port=$(SUPPLIER_WEB_PORT)
@@ -55,6 +70,21 @@ chef-cli: check-supplier ## Start chef A2A server on port 8002 (requires supplie
 	@echo "🚀 Starting chef A2A server on port $(CHEF_PORT)..."
 	@cd chef && uv run a2a_server.py
 
+chef-cli-dev: check-supplier ## Start chef A2A server with auto-reload (development mode)
+	@if lsof -i:$(CHEF_PORT) > /dev/null 2>&1; then \
+		echo "⚠️  Port $(CHEF_PORT) is already in use!"; \
+		echo ""; \
+		echo "The chef may already be running. Check with:"; \
+		echo "  make status"; \
+		echo ""; \
+		echo "To stop existing agents:"; \
+		echo "  make stop"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@echo "🚀 Starting chef A2A server on port $(CHEF_PORT) with auto-reload..."
+	@cd chef && uvicorn a2a_server:a2a_app --host 0.0.0.0 --port $(CHEF_PORT) --reload
+
 chef-web: check-supplier ## Start chef web interface on port 5002 (requires supplier A2A)
 	@echo "🚀 Starting chef web interface on port $(CHEF_WEB_PORT)..."
 	@uv run webapp.py --agent=chef --port=$(CHEF_WEB_PORT)
@@ -76,6 +106,21 @@ waiter-cli: check-chef ## Start waiter A2A server on port 8001 (requires chef)
 	fi
 	@echo "🚀 Starting waiter A2A server on port $(WAITER_PORT)..."
 	@cd waiter && uv run a2a_server.py
+
+waiter-cli-dev: check-chef ## Start waiter A2A server with auto-reload (development mode)
+	@if lsof -i:$(WAITER_PORT) > /dev/null 2>&1; then \
+		echo "⚠️  Port $(WAITER_PORT) is already in use!"; \
+		echo ""; \
+		echo "The waiter may already be running. Check with:"; \
+		echo "  make status"; \
+		echo ""; \
+		echo "To stop existing agents:"; \
+		echo "  make stop"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@echo "🚀 Starting waiter A2A server on port $(WAITER_PORT) with auto-reload..."
+	@cd waiter && uvicorn a2a_server:a2a_app --host 0.0.0.0 --port $(WAITER_PORT) --reload
 
 waiter-web: check-chef ## Start waiter web interface on port 5001 (requires chef A2A)
 	@echo "🚀 Starting waiter web interface on port $(WAITER_WEB_PORT)..."

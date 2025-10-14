@@ -14,7 +14,10 @@ Allows user to select which agent to chat with and provides a colored REPL inter
 """
 
 import sys
+import warnings
 import requests
+import asyncio
+import logging
 from simple_term_menu import TerminalMenu
 from colorama import Fore, Style, init
 from rich.console import Console
@@ -23,9 +26,23 @@ from rich.markdown import Markdown
 from rich.syntax import Syntax
 import json
 
+# Suppress experimental warnings from Google ADK
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", message="Deprecated. Please migrate to the async method.")
+warnings.filterwarnings("ignore", message=".*there are non-text parts in the response.*")
+
+# Suppress logger warnings from google.genai and google.adk
+logging.getLogger('google.genai.types').setLevel(logging.ERROR)
+logging.getLogger('google.adk').setLevel(logging.ERROR)
+logging.getLogger('google.adk.tools').setLevel(logging.ERROR)
+logging.getLogger('google.adk.sessions').setLevel(logging.ERROR)
+
+from google.adk import Agent
 from google.adk.agents.remote_a2a_agent import RemoteA2aAgent
-from google.genai.types import Part, UserContent, Content
-import asyncio
+from google.adk.tools.agent_tool import AgentTool
+from google.adk.sessions import InMemorySessionService
+from google.adk.runners import Runner
+from google.genai.types import Part, UserContent
 
 # Initialize colorama
 init(autoreset=True)
@@ -36,18 +53,21 @@ AGENTS = {
         "name": "Waiter",
         "port": 8001,
         "color": Fore.CYAN,
+        "rich_color": "cyan",
         "agent_card": "http://localhost:8001/.well-known/agent-card.json",
     },
     "chef": {
         "name": "Chef",
         "port": 8002,
         "color": Fore.YELLOW,
+        "rich_color": "yellow",
         "agent_card": "http://localhost:8002/.well-known/agent-card.json",
     },
     "supplier": {
         "name": "Supplier",
         "port": 8003,
         "color": Fore.GREEN,
+        "rich_color": "green",
         "agent_card": "http://localhost:8003/.well-known/agent-card.json",
     },
 }
@@ -157,100 +177,137 @@ def run_repl(agent_key):
     """Run the REPL for the selected agent."""
     agent_config = AGENTS[agent_key]
     color = agent_config["color"]
+    rich_color = agent_config["rich_color"]
     name = agent_config["name"]
 
-    console.print(f"\n[bold {color.lower().replace(chr(27) + '[', '').replace('m', '')}]🤖 Connected to {name} Agent[/bold {color.lower().replace(chr(27) + '[', '').replace('m', '')}]")
+    console.print(f"\n[bold {rich_color}]🤖 Connected to {name} Agent[/bold {rich_color}]")
     console.print(f"[dim]Type your message or 'exit' to quit[/dim]\n")
 
-    # Connect to the remote agent
+    # Connect to the remote agent and wrap it as a tool
     try:
         remote_agent = RemoteA2aAgent(
             name=f"{agent_key}_agent",
             agent_card=agent_config["agent_card"]
         )
+
+        # Wrap the remote agent as a tool
+        agent_tool = AgentTool(agent=remote_agent)
+
+        # Create a simple Agent that uses the remote agent as its only tool
+        # This allows us to chat "with" the remote agent by having a pass-through
+        wrapper_agent = Agent(
+            name=f"{agent_key}_wrapper",
+            model="gemini-2.5-flash",
+            description=f"Direct pass-through to {name} agent",
+            instruction=f"""You are a pass-through agent that ALWAYS calls the {agent_key}_agent tool with the user's message.
+
+IMPORTANT: For EVERY user message, immediately call the {agent_key}_agent tool with that exact message.
+Do not add any commentary or explanation. Just relay the tool's response directly.""",
+            tools=[agent_tool]
+        )
+
     except Exception as e:
         console.print(f"[bold red]Error connecting to {name}: {e}[/bold red]")
         return
 
-    # We'll use the remote agent directly without a runner
-    # RemoteA2aAgent handles its own session management
+    # Create runner with the wrapper agent
+    session_service = InMemorySessionService()
+    runner = Runner(
+        agent=wrapper_agent,
+        session_service=session_service,
+        app_name=f"restaurant_cli_{agent_key}"
+    )
 
-    while True:
-        try:
-            # Get user input with colored prompt
-            user_input = input(f"{color}{name.lower()}> {Style.RESET_ALL}").strip()
+    # Session identifiers
+    user_id = "cli_user"
+    session_id = f"cli_session_{agent_key}"
 
-            if not user_input:
-                continue
+    async def chat_loop():
+        """Async chat loop to properly handle event loop."""
+        # Create the session explicitly before using it
+        session_service.create_session_sync(
+            app_name=f"restaurant_cli_{agent_key}",
+            user_id=user_id,
+            session_id=session_id
+        )
 
-            if user_input.lower() in ['exit', 'quit', 'q']:
-                console.print(f"\n[dim]Goodbye from {name}![/dim]\n")
-                break
+        while True:
+            try:
+                # Get user input with colored prompt
+                user_input = input(f"{color}{name.lower()}> {Style.RESET_ALL}").strip()
 
-            # Send message to agent
-            console.print()
-            with console.status(f"[bold cyan]Thinking...[/bold cyan]", spinner="dots"):
-                # Call the remote agent directly using async
-                user_content = UserContent([Part(text=user_input)])
+                if not user_input:
+                    continue
 
-                async def call_agent():
+                if user_input.lower() in ['exit', 'quit', 'q']:
+                    console.print(f"\n[dim]Goodbye from {name}![/dim]\n")
+                    break
+
+                # Send message to agent
+                console.print()
+                with console.status(f"[bold cyan]Thinking...[/bold cyan]", spinner="dots"):
+                    content = UserContent([Part(text=user_input)])
                     events = []
-                    async for event in remote_agent.run_async(new_message=user_content):
+                    async for event in runner.run_async(
+                        user_id=user_id,
+                        session_id=session_id,
+                        new_message=content
+                    ):
                         events.append(event)
-                    return events
 
-                events = asyncio.run(call_agent())
+                # Process events
+                tool_calls = {}
+                response_text = ""
 
-            # Process events
-            tool_calls = {}
-            response_text = ""
+                for event in events:
+                    if hasattr(event, 'content') and event.content:
+                        for part in event.content.parts:
+                            # Handle function calls
+                            if hasattr(part, 'function_call') and part.function_call:
+                                func_call = part.function_call
+                                call_id = getattr(func_call, 'id', '')
+                                tool_name = getattr(func_call, 'name', 'unknown')
+                                args = getattr(func_call, 'args', {})
 
-            for event in events:
-                if hasattr(event, 'content') and event.content:
-                    for part in event.content.parts:
-                        # Handle function calls
-                        if hasattr(part, 'function_call') and part.function_call:
-                            func_call = part.function_call
-                            call_id = getattr(func_call, 'id', '')
-                            tool_name = getattr(func_call, 'name', 'unknown')
-                            args = getattr(func_call, 'args', {})
+                                tool_calls[call_id] = {
+                                    'name': tool_name,
+                                    'args': args
+                                }
+                                print_tool_call(tool_name, args)
 
-                            tool_calls[call_id] = {
-                                'name': tool_name,
-                                'args': args
-                            }
-                            print_tool_call(tool_name, args)
+                            # Handle function responses
+                            if hasattr(part, 'function_response') and part.function_response:
+                                func_response = part.function_response
+                                call_id = getattr(func_response, 'id', '')
+                                result = getattr(func_response, 'response', {})
 
-                        # Handle function responses
-                        if hasattr(part, 'function_response') and part.function_response:
-                            func_response = part.function_response
-                            call_id = getattr(func_response, 'id', '')
-                            result = getattr(func_response, 'response', {})
+                                if call_id in tool_calls:
+                                    tool_name = tool_calls[call_id]['name']
+                                    print_tool_call(tool_name, None, result)
 
-                            if call_id in tool_calls:
-                                tool_name = tool_calls[call_id]['name']
-                                print_tool_call(tool_name, None, result)
+                            # Handle text responses
+                            if hasattr(part, 'text') and part.text:
+                                response_text += part.text
 
-                        # Handle text responses
-                        if hasattr(part, 'text') and part.text:
-                            response_text += part.text
+                # Display final response
+                if response_text:
+                    console.print()
+                    console.print(Panel(
+                        Markdown(response_text),
+                        title=f"{name} Response",
+                        border_style=rich_color,
+                        padding=(1, 2)
+                    ))
+                    console.print()
 
-            # Display final response
-            if response_text:
-                console.print()
-                console.print(Panel(
-                    Markdown(response_text),
-                    title=f"{name} Response",
-                    border_style=color.lower().replace(chr(27) + '[', '').replace('m', ''),
-                    padding=(1, 2)
-                ))
-                console.print()
+            except KeyboardInterrupt:
+                console.print(f"\n\n[dim]Goodbye from {name}![/dim]\n")
+                break
+            except Exception as e:
+                console.print(f"\n[bold red]Error: {e}[/bold red]\n")
 
-        except KeyboardInterrupt:
-            console.print(f"\n\n[dim]Goodbye from {name}![/dim]\n")
-            break
-        except Exception as e:
-            console.print(f"\n[bold red]Error: {e}[/bold red]\n")
+    # Run the async chat loop
+    asyncio.run(chat_loop())
 
 
 def main():

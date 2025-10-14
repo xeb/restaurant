@@ -1,0 +1,7 @@
+__pycache__/*
+__pycache__
+recipe_agent/__pycache__/
+adk-samples
+adk-*.txt
+adk-*
+venv/

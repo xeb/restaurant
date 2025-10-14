@@ -185,6 +185,10 @@ make test
 bash test.sh
 ```
 
+## 🤖 Gemini CLI Integration
+
+This project can also be used with the Gemini CLI. For detailed instructions, please see the [GEMINI.md](GEMINI.md) file.
+
 ## 📋 Make Commands
 
 | Command | Description |
@@ -280,6 +284,7 @@ bash test_webapp.sh
 ```
 restaurant/
 ├── README.md                    # This file
+├── GEMINI.md                    # Gemini CLI instructions
 ├── WEBAPP.md                    # Web interface documentation
 ├── Makefile                     # Build commands
 ├── webapp.py                    # Flask web interface (all agents)

@@ -1,4 +1,4 @@
-.PHONY: help supplier supplier-cli supplier-web chef chef-cli chef-web waiter waiter-cli waiter-web cli test test-webapp test-all clean stop check-supplier check-chef check-waiter all status
+.PHONY: help supplier supplier-cli supplier-web chef chef-cli chef-web waiter waiter-cli waiter-web cli test test-webapp test-all test-orders clean stop check-supplier check-chef check-waiter all status
 
 .DEFAULT_GOAL := help
 
@@ -48,9 +48,10 @@ supplier-cli-dev: ## Start supplier A2A server with auto-reload (development mod
 	@echo "🚀 Starting supplier A2A server on port $(SUPPLIER_PORT) with auto-reload..."
 	@cd supplier && uvicorn a2a_server:a2a_app --host 0.0.0.0 --port $(SUPPLIER_PORT) --reload
 
-supplier-web: ## Start supplier web interface on port 5003
-	@echo "🚀 Starting supplier web interface on port $(SUPPLIER_WEB_PORT)..."
-	@uv run webapp.py --agent=supplier --port=$(SUPPLIER_WEB_PORT)
+supplier-web: ## Start supplier with web + A2A on port 8003 (sessions visible in browser!)
+	@echo "🚀 Starting supplier with dual exposure (web + A2A)..."
+	@echo "📝 Logging to supplier.log"
+	@uv run webapp.py --agent=supplier --with-a2a 2>&1 | tee supplier.log
 
 # Chef targets
 chef: chef-web ## Start chef (defaults to web interface on port 5002)
@@ -85,9 +86,10 @@ chef-cli-dev: check-supplier ## Start chef A2A server with auto-reload (developm
 	@echo "🚀 Starting chef A2A server on port $(CHEF_PORT) with auto-reload..."
 	@cd chef && uvicorn a2a_server:a2a_app --host 0.0.0.0 --port $(CHEF_PORT) --reload
 
-chef-web: check-supplier ## Start chef web interface on port 5002 (requires supplier A2A)
-	@echo "🚀 Starting chef web interface on port $(CHEF_WEB_PORT)..."
-	@uv run webapp.py --agent=chef --port=$(CHEF_WEB_PORT)
+chef-web: check-supplier ## Start chef with web + A2A on port 8002 (sessions visible in browser!, requires supplier A2A)
+	@echo "🚀 Starting chef with dual exposure (web + A2A)..."
+	@echo "📝 Logging to chef.log"
+	@uv run webapp.py --agent=chef --with-a2a 2>&1 | tee chef.log
 
 # Waiter targets
 waiter: waiter-web ## Start waiter (defaults to web interface on port 5001)
@@ -122,9 +124,9 @@ waiter-cli-dev: check-chef ## Start waiter A2A server with auto-reload (developm
 	@echo "🚀 Starting waiter A2A server on port $(WAITER_PORT) with auto-reload..."
 	@cd waiter && uvicorn a2a_server:a2a_app --host 0.0.0.0 --port $(WAITER_PORT) --reload
 
-waiter-web: check-chef ## Start waiter web interface on port 5001 (requires chef A2A)
-	@echo "🚀 Starting waiter web interface on port $(WAITER_WEB_PORT)..."
-	@uv run webapp.py --agent=waiter --port=$(WAITER_WEB_PORT)
+waiter-web: check-chef ## Start waiter with web + A2A on port 8001 (sessions visible in browser!, requires chef A2A)
+	@echo "🚀 Starting waiter with dual exposure (web + A2A)..."
+	@uv run webapp.py --agent=waiter --with-a2a
 
 cli: ## Start interactive CLI to chat with any agent (at least one agent must be running)
 	@echo "🚀 Starting interactive CLI..."
@@ -201,6 +203,10 @@ test-simple: check-chef ## Run simple order test (requires chef and supplier run
 	@echo "🧪 Running simple order test..."
 	@cd waiter && uv run simple_client.py
 
+test-orders: ## Setup and test waiter orders feature via make cli
+	@echo "🧪 Setting up waiter orders test..."
+	@bash test_waiter_orders.sh
+
 stop: ## Stop all agent servers (A2A and web)
 	@echo "🛑 Stopping all agents..."
 	@pkill -f "uv run.*a2a_server.py" || true
@@ -220,55 +226,40 @@ clean: stop ## Clean up logs and temporary files
 	@rm -f /tmp/supplier.log /tmp/chef.log /tmp/waiter_test.log
 	@echo "✅ Cleanup complete"
 
-status: ## Check status of all agents (A2A and web)
-	@echo "Agent Status"
-	@echo "============"
+status: ## Check status of all agents (unified web + A2A on ports 8001-8003)
+	@echo "Agent Status (Unified Web + A2A Endpoints)"
+	@echo "==========================================="
 	@echo ""
-	@echo "A2A Servers:"
 	@echo -n "  Waiter ($(WAITER_PORT)):   "
 	@if curl -s http://localhost:$(WAITER_PORT)/.well-known/agent-card.json > /dev/null 2>&1; then \
-		echo "✅ Running"; \
+		echo "✅ Running (web + A2A on http://localhost:$(WAITER_PORT))"; \
 	else \
 		echo "❌ Not running"; \
 	fi
 	@echo -n "  Chef ($(CHEF_PORT)):     "
 	@if curl -s http://localhost:$(CHEF_PORT)/.well-known/agent-card.json > /dev/null 2>&1; then \
-		echo "✅ Running"; \
+		echo "✅ Running (web + A2A on http://localhost:$(CHEF_PORT))"; \
 	else \
 		echo "❌ Not running"; \
 	fi
 	@echo -n "  Supplier ($(SUPPLIER_PORT)): "
 	@if curl -s http://localhost:$(SUPPLIER_PORT)/.well-known/agent-card.json > /dev/null 2>&1; then \
-		echo "✅ Running"; \
+		echo "✅ Running (web + A2A on http://localhost:$(SUPPLIER_PORT))"; \
 	else \
 		echo "❌ Not running"; \
 	fi
 	@echo ""
-	@echo "Web Interfaces:"
-	@echo -n "  Waiter ($(WAITER_WEB_PORT)):   "
-	@if curl -s http://localhost:$(WAITER_WEB_PORT)/ > /dev/null 2>&1; then \
-		echo "✅ Running"; \
-	else \
-		echo "❌ Not running"; \
-	fi
-	@echo -n "  Chef ($(CHEF_WEB_PORT)):     "
-	@if curl -s http://localhost:$(CHEF_WEB_PORT)/ > /dev/null 2>&1; then \
-		echo "✅ Running"; \
-	else \
-		echo "❌ Not running"; \
-	fi
-	@echo -n "  Supplier ($(SUPPLIER_WEB_PORT)): "
-	@if curl -s http://localhost:$(SUPPLIER_WEB_PORT)/ > /dev/null 2>&1; then \
-		echo "✅ Running"; \
-	else \
-		echo "❌ Not running"; \
-	fi
+	@echo "Note: All agents now expose BOTH web interface AND A2A protocol on the same port!"
+	@echo "      View in browser or communicate via A2A - sessions are shared! 🎉"
 
 all: ## Start all agents in proper order (run in separate terminals)
 	@echo "Starting all agents requires separate terminals:"
 	@echo ""
-	@echo "  Terminal 1: make supplier"
-	@echo "  Terminal 2: make chef"
-	@echo "  Terminal 3: make waiter"
+	@echo "  Terminal 1: make supplier  # Web + A2A on http://localhost:8003"
+	@echo "  Terminal 2: make chef      # Web + A2A on http://localhost:8002"
+	@echo "  Terminal 3: make waiter    # Web + A2A on http://localhost:8001"
+	@echo ""
+	@echo "All agents expose BOTH web interface AND A2A protocol on the same port!"
+	@echo "View A2A sessions in the browser! 🎉"
 	@echo ""
 	@echo "Or run automated test: make test"

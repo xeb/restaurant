@@ -71,28 +71,47 @@ tools = [FunctionTool(wait_time)]
 
 # Add pantry MCP tools
 if McpToolset:
-    try:
-        # Suppress MCP connection messages
-        f_out = io.StringIO()
-        f_err = io.StringIO()
+    # Determine pantry MCP server path (works from both root and supplier/ directory)
+    import os
 
-        with redirect_stdout(f_out), redirect_stderr(f_err):
-            pantry_connection = StdioConnectionParams(
-                server_params=StdioServerParameters(
-                    command="uv",
-                    args=["run", "../pantry_mcp_server.py"]
+    # Try to find pantry_mcp_server.py in multiple locations
+    possible_paths = [
+        "pantry_mcp_server.py",           # When running from root (webapp)
+        "../pantry_mcp_server.py",        # When running from supplier/ (a2a_server)
+    ]
+
+    pantry_path = None
+    for path in possible_paths:
+        if os.path.exists(path):
+            # Convert to absolute path so it works regardless of current directory
+            pantry_path = os.path.abspath(path)
+            break
+
+    if pantry_path is None:
+        print(f"[SUPPLIER] ⚠️  Could not find pantry_mcp_server.py in any of: {possible_paths}")
+    else:
+        try:
+            # Suppress MCP connection messages
+            f_out = io.StringIO()
+            f_err = io.StringIO()
+
+            with redirect_stdout(f_out), redirect_stderr(f_err):
+                pantry_connection = StdioConnectionParams(
+                    server_params=StdioServerParameters(
+                        command="uv",
+                        args=["run", pantry_path]
+                    )
                 )
-            )
 
-            pantry_toolset = McpToolset(
-                connection_params=pantry_connection
-            )
+                pantry_toolset = McpToolset(
+                    connection_params=pantry_connection
+                )
 
-            tools.append(pantry_toolset)
-            print("[SUPPLIER] ✅ Connected to pantry MCP server")
+                tools.append(pantry_toolset)
+                print(f"[SUPPLIER] ✅ Connected to pantry MCP server (using {pantry_path})")
 
-    except Exception as e:
-        print(f"[SUPPLIER] ⚠️  Could not connect to pantry MCP: {e}")
+        except Exception as e:
+            print(f"[SUPPLIER] ⚠️  Could not connect to pantry MCP: {e}")
 
 # Create the supplier agent
 root_agent = Agent(

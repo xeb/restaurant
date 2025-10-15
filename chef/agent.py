@@ -47,53 +47,90 @@ except ImportError:
 
 tools = []
 
+# Determine MCP server paths (works from both root and chef/ directory)
+import os
+
 # Add recipes MCP tools
 if McpToolset:
-    try:
-        f_out = io.StringIO()
-        f_err = io.StringIO()
+    # Try to find recipes_mcp_server.py in multiple locations
+    recipes_possible_paths = [
+        "chef/recipes_mcp_server.py",     # When running from root (webapp)
+        "recipes_mcp_server.py",          # When running from chef/ (a2a_server)
+    ]
 
-        with redirect_stdout(f_out), redirect_stderr(f_err):
-            recipes_connection = StdioConnectionParams(
-                server_params=StdioServerParameters(
-                    command="uv",
-                    args=["run", "recipes_mcp_server.py"]
+    recipes_path = None
+    for path in recipes_possible_paths:
+        if os.path.exists(path):
+            # Convert to absolute path so it works regardless of current directory
+
+            recipes_path = os.path.abspath(path)
+            break
+
+    if recipes_path is None:
+        print(f"[CHEF] ⚠️  Could not find recipes_mcp_server.py in any of: {recipes_possible_paths}")
+    else:
+        try:
+            f_out = io.StringIO()
+            f_err = io.StringIO()
+
+            with redirect_stdout(f_out), redirect_stderr(f_err):
+                recipes_connection = StdioConnectionParams(
+                    server_params=StdioServerParameters(
+                        command="uv",
+                        args=["run", recipes_path]
+                    )
                 )
-            )
 
-            recipes_toolset = McpToolset(
-                connection_params=recipes_connection
-            )
+                recipes_toolset = McpToolset(
+                    connection_params=recipes_connection
+                )
 
-            tools.append(recipes_toolset)
-            print("[CHEF] ✅ Connected to recipes MCP server")
+                tools.append(recipes_toolset)
+                print(f"[CHEF] ✅ Connected to recipes MCP server (using {recipes_path})")
 
-    except Exception as e:
-        print(f"[CHEF] ⚠️  Could not connect to recipes MCP: {e}")
+        except Exception as e:
+            print(f"[CHEF] ⚠️  Could not connect to recipes MCP: {e}")
 
 # Add pantry MCP tools
 if McpToolset:
-    try:
-        f_out = io.StringIO()
-        f_err = io.StringIO()
+    # Try to find pantry_mcp_server.py in multiple locations
+    pantry_possible_paths = [
+        "pantry_mcp_server.py",           # When running from root (webapp)
+        "../pantry_mcp_server.py",        # When running from chef/ (a2a_server)
+    ]
 
-        with redirect_stdout(f_out), redirect_stderr(f_err):
-            pantry_connection = StdioConnectionParams(
-                server_params=StdioServerParameters(
-                    command="uv",
-                    args=["run", "../pantry_mcp_server.py"]
+    pantry_path = None
+    for path in pantry_possible_paths:
+        if os.path.exists(path):
+            # Convert to absolute path so it works regardless of current directory
+
+            pantry_path = os.path.abspath(path)
+            break
+
+    if pantry_path is None:
+        print(f"[CHEF] ⚠️  Could not find pantry_mcp_server.py in any of: {pantry_possible_paths}")
+    else:
+        try:
+            f_out = io.StringIO()
+            f_err = io.StringIO()
+
+            with redirect_stdout(f_out), redirect_stderr(f_err):
+                pantry_connection = StdioConnectionParams(
+                    server_params=StdioServerParameters(
+                        command="uv",
+                        args=["run", pantry_path]
+                    )
                 )
-            )
 
-            pantry_toolset = McpToolset(
-                connection_params=pantry_connection
-            )
+                pantry_toolset = McpToolset(
+                    connection_params=pantry_connection
+                )
 
-            tools.append(pantry_toolset)
-            print("[CHEF] ✅ Connected to pantry MCP server")
+                tools.append(pantry_toolset)
+                print(f"[CHEF] ✅ Connected to pantry MCP server (using {pantry_path})")
 
-    except Exception as e:
-        print(f"[CHEF] ⚠️  Could not connect to pantry MCP: {e}")
+        except Exception as e:
+            print(f"[CHEF] ⚠️  Could not connect to pantry MCP: {e}")
 
 # Add supplier agent as a tool (A2A)
 try:

@@ -14,12 +14,17 @@ Both the chef and supplier agents use this to check and update inventory.
 
 from fastmcp import FastMCP
 import fire
+import json
+import os
 from typing import Dict
 
 mcp = FastMCP()
 
-# Pantry inventory - ingredient name to quantity mapping
-PANTRY_INVENTORY: Dict[str, int] = {
+# Pantry JSON file path
+PANTRY_FILE = "pantry.json"
+
+# Default pantry inventory
+DEFAULT_PANTRY: Dict[str, int] = {
     "quinoa": 5,
     "avocado": 8,
     "chickpeas": 10,
@@ -55,6 +60,33 @@ PANTRY_INVENTORY: Dict[str, int] = {
     "chia_seeds": 8,
     "granola": 5,
 }
+
+def load_pantry() -> Dict[str, int]:
+    """Load pantry inventory from JSON file."""
+    if os.path.exists(PANTRY_FILE):
+        try:
+            with open(PANTRY_FILE, 'r') as f:
+                inventory = json.load(f)
+                print(f"[PANTRY] Loaded inventory from {PANTRY_FILE} ({len(inventory)} items)")
+                return inventory
+        except Exception as e:
+            print(f"[PANTRY] ⚠️  Error loading {PANTRY_FILE}: {e}, using defaults")
+            return DEFAULT_PANTRY.copy()
+    else:
+        print(f"[PANTRY] No {PANTRY_FILE} found, using default inventory")
+        return DEFAULT_PANTRY.copy()
+
+def save_pantry(inventory: Dict[str, int]) -> None:
+    """Save pantry inventory to JSON file."""
+    try:
+        with open(PANTRY_FILE, 'w') as f:
+            json.dump(inventory, f, indent=2)
+        print(f"[PANTRY] 💾 Saved inventory to {PANTRY_FILE}")
+    except Exception as e:
+        print(f"[PANTRY] ⚠️  Error saving to {PANTRY_FILE}: {e}")
+
+# Load pantry from file (or use defaults)
+PANTRY_INVENTORY = load_pantry()
 
 @mcp.tool
 def check_pantry(ingredient: str = None) -> dict:
@@ -115,6 +147,9 @@ def take_ingredients(ingredients: dict) -> dict:
         PANTRY_INVENTORY[ingredient] -= quantity
         print(f"[PANTRY] Took {quantity} units of {ingredient} (remaining: {PANTRY_INVENTORY[ingredient]})")
 
+    # Save to file
+    save_pantry(PANTRY_INVENTORY)
+
     print(f"[PANTRY] ✅ Successfully provided all ingredients")
     return {
         "success": True,
@@ -138,6 +173,9 @@ def add_ingredients(ingredients: dict) -> dict:
         current = PANTRY_INVENTORY.get(ingredient, 0)
         PANTRY_INVENTORY[ingredient] = current + quantity
         print(f"[PANTRY] Added {quantity} units of {ingredient} (now: {PANTRY_INVENTORY[ingredient]})")
+
+    # Save to file
+    save_pantry(PANTRY_INVENTORY)
 
     print(f"[PANTRY] ✅ Successfully restocked {len(ingredients)} items")
     return {

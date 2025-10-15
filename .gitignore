@@ -5,3 +5,4 @@ adk-samples
 adk-*.txt
 adk-*
 venv/
+*.log

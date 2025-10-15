@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["flask", "google-adk[a2a]", "markdown"]
+# dependencies = ["flask", "google-adk[a2a]", "markdown", "uvicorn"]
 # ///
 
 import argparse
@@ -23,13 +23,15 @@ import concurrent.futures
 import markdown
 
 # Suppress warnings
-warnings.filterwarnings("ignore", message=".*auth_config or auth_config.auth_scheme is missing.*")
-warnings.filterwarnings("ignore", message=".*BaseAuthenticatedTool.*")
-warnings.filterwarnings("ignore", message=".*there are non-text parts in the response.*")
-warnings.filterwarnings("ignore", message=".*EXPERIMENTAL.*")
+warnings.filterwarnings("ignore")
+os.environ['PYTHONWARNINGS'] = 'ignore'
 
-logging.getLogger('google.adk.tools').setLevel(logging.ERROR)
-logging.getLogger('google.adk').setLevel(logging.ERROR)
+# Suppress all Google ADK logging except critical errors
+logging.getLogger('google').setLevel(logging.CRITICAL)
+logging.getLogger('google.adk').setLevel(logging.CRITICAL)
+logging.getLogger('google.adk.tools').setLevel(logging.CRITICAL)
+logging.getLogger('google.genai').setLevel(logging.CRITICAL)
+logging.getLogger('werkzeug').setLevel(logging.WARNING)  # Flask's logger
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
@@ -39,6 +41,7 @@ sessions = {}
 agent_module = None
 agent_name = ""
 agent_port = 0
+agent_type = ""  # waiter, chef, or supplier
 
 # HTML template
 HTML_TEMPLATE = '''
@@ -368,6 +371,33 @@ HTML_TEMPLATE = '''
 </html>
 '''
 
+def serialize_response_data(data):
+    """Convert complex response objects to JSON-serializable format."""
+    if data is None:
+        return None
+
+    # If it's already a simple type, return as-is
+    if isinstance(data, (str, int, float, bool)):
+        return data
+
+    # If it's a dict, recursively serialize
+    if isinstance(data, dict):
+        return {k: serialize_response_data(v) for k, v in data.items()}
+
+    # If it's a list, recursively serialize
+    if isinstance(data, (list, tuple)):
+        return [serialize_response_data(item) for item in data]
+
+    # For complex objects, try to extract data or convert to string
+    if hasattr(data, '__dict__'):
+        try:
+            return serialize_response_data(data.__dict__)
+        except:
+            return str(data)
+
+    # Fallback to string representation
+    return str(data)
+
 def run_agent_async(agent, runner, session, message):
     """Run the agent and extract events."""
     try:
@@ -408,7 +438,7 @@ def run_agent_async(agent, runner, session, message):
                         else:
                             tool_calls.append({
                                 'name': tool_name,
-                                'arguments': getattr(func_call, 'args', {}),
+                                'arguments': serialize_response_data(getattr(func_call, 'args', {})),
                                 'result': None,
                                 'id': getattr(func_call, 'id', '')
                             })
@@ -420,16 +450,19 @@ def run_agent_async(agent, runner, session, message):
                         response_id = getattr(func_response, 'id', '')
                         response_data = getattr(func_response, 'response', {})
 
+                        # Serialize the response data
+                        serialized_data = serialize_response_data(response_data)
+
                         # Match to A2A call
                         for ac in a2a_calls:
                             if ac['response'] is None and (ac['target_agent'] == response_name or ac['id'] == response_id):
-                                ac['response'] = str(response_data)
+                                ac['response'] = str(serialized_data)
                                 break
 
                         # Match to tool call
                         for tc in tool_calls:
                             if tc['result'] is None and (tc['name'] == response_name or tc['id'] == response_id):
-                                tc['result'] = response_data
+                                tc['result'] = serialized_data
                                 break
 
         return {
@@ -443,7 +476,7 @@ def run_agent_async(agent, runner, session, message):
         traceback.print_exc()
         return {'error': str(e)}
 
-@app.route('/')
+@app.route('/', methods=['GET'])
 def index():
     return render_template_string(HTML_TEMPLATE, agent_name=agent_name, agent_port=agent_port)
 
@@ -575,6 +608,226 @@ def get_sessions():
     except Exception as e:
         return jsonify({'error': str(e)})
 
+# A2A Protocol Endpoints (JSON-RPC 2.0)
+@app.route('/.well-known/agent-card.json', methods=['GET'])
+def agent_card():
+    """Return agent card for A2A discovery."""
+    try:
+        # Construct agent card from the agent
+        root_agent = agent_module.root_agent
+
+        card = {
+            "name": getattr(root_agent, 'name', f"{agent_type}_agent"),
+            "description": getattr(root_agent, 'description', f"{agent_name} agent"),
+            "url": f"http://localhost:{agent_port}",
+            "version": "0.0.1",
+            "protocolVersion": "0.3.0",
+            "capabilities": {},
+            "preferredTransport": "JSONRPC",
+            "supportsAuthenticatedExtendedCard": False,
+            "defaultInputModes": ["text/plain"],
+            "defaultOutputModes": ["text/plain"],
+            "skills": [
+                {
+                    "id": getattr(root_agent, 'name', f"{args.agent}_agent"),
+                    "name": "model",
+                    "description": getattr(root_agent, 'instruction', f"{agent_name} agent"),
+                    "tags": ["llm"]
+                }
+            ]
+        }
+
+        # Add tool skills if available
+        if hasattr(root_agent, 'tools') and root_agent.tools:
+            for tool in root_agent.tools:
+                tool_name = getattr(tool, 'name', str(tool))
+                tool_desc = getattr(tool, 'description', f"Tool: {tool_name}")
+                card["skills"].append({
+                    "id": f"{card['name']}-{tool_name}",
+                    "name": tool_name,
+                    "description": tool_desc,
+                    "tags": ["llm", "tools"]
+                })
+
+        return jsonify(card)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/', methods=['POST'])
+def a2a_jsonrpc():
+    """Handle A2A JSON-RPC 2.0 requests."""
+    try:
+        print(f"\n[A2A] ========== POST REQUEST RECEIVED ==========", flush=True)
+        data = request.get_json()
+        print(f"[A2A] Request data type: {type(data)}", flush=True)
+        print(f"[A2A] Request data keys: {data.keys() if isinstance(data, dict) else 'N/A'}", flush=True)
+        print(f"[A2A] Full request data: {data}", flush=True)
+
+        # Check if this is a JSON-RPC request
+        if not isinstance(data, dict) or 'jsonrpc' not in data:
+            # Not a JSON-RPC request, return error
+            print(f"[A2A] ❌ Not a valid JSON-RPC request (missing 'jsonrpc' field)", flush=True)
+            return jsonify({
+                'jsonrpc': '2.0',
+                'error': {'code': -32600, 'message': 'Invalid Request'},
+                'id': data.get('id') if isinstance(data, dict) else None
+            })
+
+        method = data.get('method')
+        params = data.get('params', {})
+        request_id = data.get('id')
+
+        print(f"[A2A] ✅ Valid JSON-RPC request - method: {method}, id: {request_id}", flush=True)
+
+        # Handle both invoke and message/send methods (Google ADK uses both)
+        if method in ['invoke', 'message/send']:
+            # Extract message text based on method format
+            if method == 'invoke':
+                message_text = params.get('message', {}).get('text', '')
+            else:  # message/send
+                message_obj = params.get('message', {})
+                parts = message_obj.get('parts', [])
+                # Get text from first text part
+                message_text = next((p.get('text', '') for p in parts if p.get('kind') == 'text'), '')
+
+            print(f"[A2A] 📨 {method} method called with message: {message_text[:80]}...", flush=True)
+
+            # Create or get A2A session
+            # Use a single persistent session for all A2A calls
+            # This makes all A2A interactions visible in the web UI
+            a2a_session_id = "a2a_session"
+
+            print(f"[A2A] 📝 Using session ID: {a2a_session_id}", flush=True)
+
+            if a2a_session_id not in sessions:
+                print(f"[A2A] 🆕 Creating new session: {a2a_session_id}", flush=True)
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+                session_service = InMemorySessionService()
+                artifact_service = InMemoryArtifactService()
+
+                runner = Runner(
+                    app_name=f"restaurant-{agent_name}",
+                    agent=agent_module.root_agent,
+                    artifact_service=artifact_service,
+                    session_service=session_service
+                )
+
+                session = loop.run_until_complete(
+                    session_service.create_session(
+                        app_name=runner.app_name,
+                        user_id="a2a_agent"
+                    )
+                )
+
+                sessions[a2a_session_id] = {
+                    'session': session,
+                    'runner': runner,
+                    'loop': loop,
+                    'history': [],
+                    'created_at': datetime.now().isoformat()
+                }
+                print(f"[A2A] ✅ Session created: {a2a_session_id}, Total sessions: {len(sessions)}", flush=True)
+            else:
+                print(f"[A2A] 🔄 Reusing existing session: {a2a_session_id}", flush=True)
+
+            session_data = sessions[a2a_session_id]
+            session = session_data['session']
+            runner = session_data['runner']
+
+            print(f"[A2A] 📝 Adding user message to history", flush=True)
+            session_data['history'].append({
+                'type': 'user',
+                'content': f"[A2A Request] {message_text}",
+                'timestamp': datetime.now().isoformat(),
+                'source': 'a2a'
+            })
+            print(f"[A2A] 📊 Session now has {len(session_data['history'])} history entries", flush=True)
+
+            print(f"[A2A] 🤖 Running agent...", flush=True)
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_agent_async, agent_module.root_agent, runner, session, message_text)
+                result = future.result(timeout=120)
+
+            if 'error' in result:
+                return jsonify({
+                    'jsonrpc': '2.0',
+                    'error': {'code': -32603, 'message': result['error']},
+                    'id': request_id
+                })
+
+            print(f"[A2A] ✅ Agent finished, response: {result.get('response', '')[:80]}...", flush=True)
+
+            agent_entry = {
+                'type': 'agent',
+                'content': result.get('response', ''),
+                'timestamp': datetime.now().isoformat(),
+                'source': 'a2a'
+            }
+
+            if result.get('tool_calls'):
+                agent_entry['tool_calls'] = result['tool_calls']
+                print(f"[A2A] 🔧 Tool calls: {len(result['tool_calls'])}", flush=True)
+
+            if result.get('a2a_calls'):
+                agent_entry['a2a_calls'] = result['a2a_calls']
+                print(f"[A2A] 🔄 A2A calls: {len(result['a2a_calls'])}", flush=True)
+
+            session_data['history'].append(agent_entry)
+            print(f"[A2A] 📊 Session now has {len(session_data['history'])} history entries (after agent response)", flush=True)
+            print(f"[A2A] 💾 Sessions dict now has {len(sessions)} total sessions", flush=True)
+
+            # Return JSON-RPC response with format based on method
+            print(f"[A2A] 📤 Returning JSON-RPC response for method: {method}", flush=True)
+
+            if method == 'invoke':
+                # Simple format for invoke
+                response_data = {
+                    'jsonrpc': '2.0',
+                    'result': {
+                        'message': {
+                            'text': result.get('response', '')
+                        }
+                    },
+                    'id': request_id
+                }
+            else:  # message/send - use Google ADK format
+                response_data = {
+                    'jsonrpc': '2.0',
+                    'result': {
+                        'messageId': str(uuid.uuid4()),
+                        'parts': [
+                            {
+                                'kind': 'text',
+                                'text': result.get('response', '')
+                            }
+                        ],
+                        'role': 'agent'
+                    },
+                    'id': request_id
+                }
+
+            return jsonify(response_data)
+
+        # Unknown method
+        return jsonify({
+            'jsonrpc': '2.0',
+            'error': {'code': -32601, 'message': 'Method not found'},
+            'id': request_id
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'jsonrpc': '2.0',
+            'error': {'code': -32603, 'message': str(e)},
+            'id': request_id if 'request_id' in locals() else None
+        })
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Restaurant Multi-Agent Web Interface')
     parser.add_argument('--agent', type=str, required=True,
@@ -583,6 +836,8 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, help='Port to run on (auto-assigned if not specified)')
     parser.add_argument('--host', type=str, default='0.0.0.0', help='Host to bind to')
     parser.add_argument('--debug', action='store_true', default=False, help='Debug mode')
+    parser.add_argument('--with-a2a', action='store_true', default=False,
+                       help='Also expose A2A server on the agent port (8001-8003)')
 
     args = parser.parse_args()
 
@@ -609,9 +864,24 @@ if __name__ == '__main__':
     finally:
         os.chdir(original_dir)
 
+    # Set module-level variables
+    agent_type = args.agent
     agent_name = args.agent.capitalize()
-    default_port = {'waiter': 5001, 'chef': 5002, 'supplier': 5003}[args.agent]
-    agent_port = args.port or default_port
+    default_web_port = {'waiter': 5001, 'chef': 5002, 'supplier': 5003}[args.agent]
+    default_a2a_port = {'waiter': 8001, 'chef': 8002, 'supplier': 8003}[args.agent]
 
-    print(f"Starting {agent_name} agent web interface on {args.host}:{agent_port}")
+    # Use A2A port if --with-a2a is enabled, otherwise use web port
+    if args.with_a2a:
+        agent_port = args.port or default_a2a_port
+        print(f"🚀 Starting {agent_name} agent with dual exposure (Web + A2A):")
+        print(f"   - Unified endpoint: http://{args.host}:{agent_port}")
+        print(f"   - Web interface: http://{args.host}:{agent_port}/ (GET)")
+        print(f"   - A2A JSON-RPC: http://{args.host}:{agent_port}/ (POST)")
+        print(f"   - Agent card: http://{args.host}:{agent_port}/.well-known/agent-card.json")
+        print(f"")
+        print(f"   💡 A2A sessions will be visible in the web interface!")
+    else:
+        agent_port = args.port or default_web_port
+        print(f"🚀 Starting {agent_name} agent web interface on {args.host}:{agent_port}")
+
     app.run(host=args.host, port=agent_port, debug=args.debug)

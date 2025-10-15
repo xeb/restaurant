@@ -42,6 +42,7 @@ agent_module = None
 agent_name = ""
 agent_port = 0
 agent_type = ""  # waiter, chef, or supplier
+agent_emoji = ""  # emoji for the agent
 
 # HTML template
 HTML_TEMPLATE = '''
@@ -78,7 +79,7 @@ HTML_TEMPLATE = '''
         <header class="banner-gradient text-white border-b border-gray-200">
             <div class="px-8 py-4 flex justify-between items-center">
                 <div>
-                    <h1 class="text-4xl font-bold tracking-tight">🍽️ Restaurant - {{ agent_name }}</h1>
+                    <h1 class="text-4xl font-bold tracking-tight">{{ agent_emoji }} Restaurant - {{ agent_name }}</h1>
                     <p class="text-sm opacity-90 mt-1">Multi-Agent System on port {{ agent_port }}</p>
                 </div>
                 <div class="flex items-center space-x-4">
@@ -609,7 +610,7 @@ def run_agent_async(agent, runner, session, message):
 
 @app.route('/', methods=['GET'])
 def index():
-    return render_template_string(HTML_TEMPLATE, agent_name=agent_name, agent_port=agent_port)
+    return render_template_string(HTML_TEMPLATE, agent_name=agent_name, agent_port=agent_port, agent_emoji=agent_emoji)
 
 @app.route('/send', methods=['POST'])
 def send_message():
@@ -1216,11 +1217,9 @@ if __name__ == '__main__':
     # Import the appropriate agent module
     import importlib.util
 
-    if args.agent == 'waiter':
-        agent_file = os.path.join(os.path.dirname(__file__), 'waiter_standalone.py')
-    else:
-        agent_dir = os.path.join(os.path.dirname(__file__), args.agent)
-        agent_file = os.path.join(agent_dir, 'agent.py')
+    # All agents now use the same pattern: {agent}/agent.py
+    agent_dir = os.path.join(os.path.dirname(__file__), args.agent)
+    agent_file = os.path.join(agent_dir, 'agent.py')
 
     spec = importlib.util.spec_from_file_location(f"{args.agent}_agent", agent_file)
     agent_module = importlib.util.module_from_spec(spec)
@@ -1228,8 +1227,7 @@ if __name__ == '__main__':
 
     # Change to appropriate directory for relative imports
     original_dir = os.getcwd()
-    if args.agent != 'waiter':
-        os.chdir(os.path.join(os.path.dirname(__file__), args.agent))
+    os.chdir(os.path.join(os.path.dirname(__file__), args.agent))
 
     try:
         spec.loader.exec_module(agent_module)
@@ -1239,6 +1237,7 @@ if __name__ == '__main__':
     # Set module-level variables
     agent_type = args.agent
     agent_name = args.agent.capitalize()
+    agent_emoji = {'waiter': '🙋', 'chef': '👨‍🍳', 'supplier': '🚚'}[args.agent]
     default_web_port = {'waiter': 5001, 'chef': 5002, 'supplier': 5003}[args.agent]
     default_a2a_port = {'waiter': 8001, 'chef': 8002, 'supplier': 8003}[args.agent]
 

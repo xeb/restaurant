@@ -1,4 +1,4 @@
-.PHONY: help supplier supplier-cli supplier-web chef chef-cli chef-web waiter waiter-cli waiter-web cli test test-webapp test-all test-orders clean clear stop check-supplier check-chef check-waiter all status
+.PHONY: help supplier supplier-cli supplier-web chef chef-cli chef-web waiter waiter-cli waiter-web cli test test-webapp test-all test-orders clean clear stop check-supplier check-chef check-waiter all logs status
 
 .DEFAULT_GOAL := help
 
@@ -264,14 +264,28 @@ status: ## Check status of all agents (unified web + A2A on ports 8001-8003)
 	@echo "Note: All agents now expose BOTH web interface AND A2A protocol on the same port!"
 	@echo "      View in browser or communicate via A2A - sessions are shared! 🎉"
 
-all: ## Start all agents in proper order (run in separate terminals)
-	@echo "Starting all agents requires separate terminals:"
+all: ## Start all agents in background with logging (use 'make logs' to view output)
+	@echo "Starting all agents in background..."
+	@if lsof -i:$(SUPPLIER_PORT) > /dev/null 2>&1 || lsof -i:$(CHEF_PORT) > /dev/null 2>&1 || lsof -i:$(WAITER_PORT) > /dev/null 2>&1; then \
+		echo "⚠️  Some ports are already in use!"; \
+		echo ""; \
+		make status; \
+		echo ""; \
+		echo "To stop existing agents: make stop"; \
+		exit 1; \
+	fi
+	@(uv run webapp.py --agent=supplier --with-a2a > supplier.log 2>&1 &) && sleep 3 && echo "  Supplier started (port $(SUPPLIER_PORT), logging to supplier.log)"
+	@(uv run webapp.py --agent=chef --with-a2a > chef.log 2>&1 &) && sleep 3 && echo "  Chef started (port $(CHEF_PORT), logging to chef.log)"
+	@(uv run webapp.py --agent=waiter --with-a2a > waiter.log 2>&1 &) && sleep 3 && echo "  Waiter started (port $(WAITER_PORT), logging to waiter.log)"
 	@echo ""
-	@echo "  Terminal 1: make supplier  # Web + A2A on http://localhost:8003"
-	@echo "  Terminal 2: make chef      # Web + A2A on http://localhost:8002"
-	@echo "  Terminal 3: make waiter    # Web + A2A on http://localhost:8001"
+	@echo "All agents started! 🎉"
 	@echo ""
-	@echo "All agents expose BOTH web interface AND A2A protocol on the same port!"
-	@echo "View A2A sessions in the browser! 🎉"
+	@make status
 	@echo ""
-	@echo "Or run automated test: make test"
+	@echo "To view all logs: make logs"
+	@echo "To stop all agents: make stop"
+
+logs: ## Tail all agent logs in real-time
+	@echo "Tailing all agent logs (Ctrl+C to stop)..."
+	@echo "=========================================="
+	@tail -f supplier.log chef.log waiter.log 2>/dev/null || echo "⚠️  No log files found yet. Start agents with 'make all'"

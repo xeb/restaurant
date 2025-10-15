@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Standalone waiter agent for webapp - uses chef via A2A and orders MCP."""
+"""Waiter agent - uses chef via A2A and orders/menu MCP servers."""
 
 import io
 import sys
@@ -12,10 +12,10 @@ try:
     from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset as McpToolset
     from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams, StdioServerParameters
 except ImportError:
-    print("[WAITER STANDALONE] Error: Could not import MCP tools", file=sys.stderr)
+    print("[WAITER] Error: Could not import MCP tools", file=sys.stderr)
     McpToolset = None
 
-print("[WAITER STANDALONE] Connecting to chef agent via A2A...")
+print("[WAITER] Connecting to chef agent via A2A...")
 
 tools = []
 
@@ -28,10 +28,10 @@ try:
     chef_tool = AgentTool(agent=chef_agent)
     tools.append(chef_tool)
 
-    print("[WAITER STANDALONE] ✅ Connected to chef agent (port 8002)")
+    print("[WAITER] ✅ Connected to chef agent (port 8002)")
 
 except Exception as e:
-    print(f"[WAITER STANDALONE] ⚠️  Could not connect to chef agent: {e}")
+    print(f"[WAITER] ⚠️  Could not connect to chef agent: {e}")
 
 # Add orders MCP tools
 if McpToolset:
@@ -47,34 +47,29 @@ if McpToolset:
     for path in orders_possible_paths:
         if os.path.exists(path):
             # Convert to absolute path so it works regardless of current directory
-
             orders_path = os.path.abspath(path)
             break
 
     if orders_path is None:
-        print(f"[WAITER STANDALONE] ⚠️  Could not find orders_mcp_server.py in any of: {orders_possible_paths}")
+        print(f"[WAITER] ⚠️  Could not find orders_mcp_server.py in any of: {orders_possible_paths}")
     else:
         try:
-            f_out = io.StringIO()
-            f_err = io.StringIO()
-
-            with redirect_stdout(f_out), redirect_stderr(f_err):
-                orders_connection = StdioConnectionParams(
-                    server_params=StdioServerParameters(
-                        command="uv",
-                        args=["run", orders_path]
-                    )
+            orders_connection = StdioConnectionParams(
+                server_params=StdioServerParameters(
+                    command="uv",
+                    args=["run", orders_path]
                 )
+            )
 
-                orders_toolset = McpToolset(
-                    connection_params=orders_connection
-                )
+            orders_toolset = McpToolset(
+                connection_params=orders_connection
+            )
 
-                tools.append(orders_toolset)
-                print(f"[WAITER STANDALONE] ✅ Connected to orders MCP server (using {orders_path})")
+            tools.append(orders_toolset)
+            print(f"[WAITER] ✅ Connected to orders MCP server (using {orders_path})")
 
         except Exception as e:
-            print(f"[WAITER STANDALONE] ⚠️  Could not connect to orders MCP: {e}")
+            print(f"[WAITER] ⚠️  Could not connect to orders MCP: {e}")
 
 # Add menu MCP tools
 if McpToolset:
@@ -92,29 +87,25 @@ if McpToolset:
             break
 
     if menu_path is None:
-        print(f"[WAITER STANDALONE] ⚠️  Could not find menu_mcp_server.py in any of: {menu_possible_paths}")
+        print(f"[WAITER] ⚠️  Could not find menu_mcp_server.py in any of: {menu_possible_paths}")
     else:
         try:
-            f_out = io.StringIO()
-            f_err = io.StringIO()
-
-            with redirect_stdout(f_out), redirect_stderr(f_err):
-                menu_connection = StdioConnectionParams(
-                    server_params=StdioServerParameters(
-                        command="uv",
-                        args=["run", menu_path]
-                    )
+            menu_connection = StdioConnectionParams(
+                server_params=StdioServerParameters(
+                    command="uv",
+                    args=["run", menu_path]
                 )
+            )
 
-                menu_toolset = McpToolset(
-                    connection_params=menu_connection
-                )
+            menu_toolset = McpToolset(
+                connection_params=menu_connection
+            )
 
-                tools.append(menu_toolset)
-                print(f"[WAITER STANDALONE] ✅ Connected to menu MCP server (using {menu_path})")
+            tools.append(menu_toolset)
+            print(f"[WAITER] ✅ Connected to menu MCP server (using {menu_path})")
 
         except Exception as e:
-            print(f"[WAITER STANDALONE] ⚠️  Could not connect to menu MCP: {e}")
+            print(f"[WAITER] ⚠️  Could not connect to menu MCP: {e}")
 
 # Create the waiter agent
 root_agent = Agent(
@@ -157,7 +148,8 @@ WORKFLOW FOR TAKING AN ORDER:
 2. Wait for customer to provide their name
 3. Ask: "What would you like to order, [name]?"
 4. Customer orders (e.g., "Greek Salad")
-5. Send order to chef: chef_agent("Order: Greek Salad for [name]")
+5. Send order to chef: chef_agent("Order: Greek Salad")
+   - Do NOT include the customer's name in the message to the chef
 6. Chef will respond with time estimate (e.g., "ready in 15 minutes")
 7. Save the order: save_order(name="[name]", order_details="Greek Salad", estimated_wait_time="15 minutes")
    - This returns an order_id (keep track of it internally)
@@ -170,6 +162,7 @@ IF CUSTOMER ASKS "WHERE IS MY FOOD?" or "WHAT'S MY ORDER STATUS?":
 1. Use list_orders() to find their order by name
 2. Check the status
 3. If READY: Say "Your [dish] is ready!" and call set_order_status(order_id, "SERVED")
+   - THEN notify the chef: chef_agent("Order #[order_id] has been delivered")
 4. If COOKING: Say "Your order is still being prepared by the chef. It should be ready soon."
 5. If RECEIVED: Say "Your order has been received and will be sent to the kitchen shortly."
 
@@ -189,7 +182,7 @@ Customer: "Alice"
 You: "Nice to meet you, Alice! What would you like to order today?"
 
 Customer: "Greek Salad"
-You: [Use chef_agent("Order: Greek Salad for Alice")]
+You: [Use chef_agent("Order: Greek Salad")]
      [Chef responds: "Greek Salad will be ready in 15 minutes (prep: 15min, cook: 0min)"]
      [Use save_order(name="Alice", order_details="Greek Salad", estimated_wait_time="15 minutes") → returns order_id 1]
      [Use set_order_status(1, "COOKING")]
@@ -199,6 +192,7 @@ You: [Use chef_agent("Order: Greek Salad for Alice")]
 Customer: "Where is my food?"
 You: [Use list_orders() → finds order #1 for Alice with status READY]
      [Use set_order_status(1, "SERVED")]
+     [Use chef_agent("Order #1 has been delivered")]
      "Your Greek Salad is ready! Here you go, Alice. Enjoy your meal!"
 
 Customer: "What is my order ID?"

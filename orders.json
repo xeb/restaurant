@@ -1,1 +1,32 @@
-{"orders": {}, "next_order_id": 1}
+{
+    "orders": {
+        "1": {
+            "order_id": 1,
+            "name": "Alice",
+            "order_details": "Avocado Toast",
+            "estimated_wait_time": "13 minutes",
+            "status": "SERVED",
+            "created_at": "2025-10-15T14:13:36.950013",
+            "updated_at": "2025-10-15T14:14:21.358365"
+        },
+        "2": {
+            "order_id": 2,
+            "name": "Bob",
+            "order_details": "Greek Salad",
+            "estimated_wait_time": "18 minutes",
+            "status": "SERVED",
+            "created_at": "2025-10-15T14:19:00.022984",
+            "updated_at": "2025-10-15T14:19:35.811912"
+        },
+        "3": {
+            "order_id": 3,
+            "name": "Mark",
+            "order_details": "10 Grilled Salmons with Vegetables",
+            "estimated_wait_time": "33 minutes",
+            "status": "READY",
+            "created_at": "2025-10-15T14:36:57.224009",
+            "updated_at": "2025-10-15T14:36:59.043319"
+        }
+    },
+    "next_order_id": 4
+}

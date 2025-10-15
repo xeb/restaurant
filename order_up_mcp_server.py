@@ -160,6 +160,42 @@ def get_order_status(order_id: int) -> dict:
         "order": order
     }
 
+@mcp.tool
+def mark_order_delivered(order_id: int) -> dict:
+    """Mark an order as delivered once it has been served to the customer.
+
+    Args:
+        order_id: The order ID to mark as delivered
+
+    Returns:
+        Confirmation of delivery status update
+    """
+    print(f"[ORDER_UP] 📦 Marking order #{order_id} as delivered")
+
+    orders = ORDERS_DATA.get("orders", {})
+    order_id_str = str(order_id)
+
+    if order_id_str not in orders:
+        return {
+            "success": False,
+            "message": f"Order #{order_id} not found"
+        }
+
+    # Update status to delivered
+    orders[order_id_str]["status"] = "delivered"
+    orders[order_id_str]["delivered_at"] = datetime.now().isoformat()
+
+    save_orders(ORDERS_DATA)
+
+    print(f"[ORDER_UP] ✅ Order #{order_id} marked as delivered")
+
+    return {
+        "success": True,
+        "order_id": order_id,
+        "status": "delivered",
+        "message": f"Order #{order_id} has been marked as delivered"
+    }
+
 def main(transport="stdio", host="0.0.0.0", port=8726):
     """Run the order_up MCP server."""
     if transport in ["sse", "streamable-http"]:

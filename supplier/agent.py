@@ -88,23 +88,19 @@ if McpToolset:
     else:
         try:
             # Suppress MCP connection messages
-            f_out = io.StringIO()
-            f_err = io.StringIO()
-
-            with redirect_stdout(f_out), redirect_stderr(f_err):
-                pantry_connection = StdioConnectionParams(
+            pantry_connection = StdioConnectionParams(
                     server_params=StdioServerParameters(
                         command="uv",
                         args=["run", pantry_path]
-                    )
                 )
+            )
 
-                pantry_toolset = McpToolset(
+            pantry_toolset = McpToolset(
                     connection_params=pantry_connection
-                )
+            )
 
-                tools.append(pantry_toolset)
-                print(f"[SUPPLIER] ✅ Connected to pantry MCP server (using {pantry_path})")
+            tools.append(pantry_toolset)
+            print(f"[SUPPLIER] ✅ Connected to pantry MCP server (using {pantry_path})")
 
         except Exception as e:
             print(f"[SUPPLIER] ⚠️  Could not connect to pantry MCP: {e}")

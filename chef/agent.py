@@ -70,23 +70,19 @@ if McpToolset:
         print(f"[CHEF] ⚠️  Could not find recipes_mcp_server.py in any of: {recipes_possible_paths}")
     else:
         try:
-            f_out = io.StringIO()
-            f_err = io.StringIO()
-
-            with redirect_stdout(f_out), redirect_stderr(f_err):
-                recipes_connection = StdioConnectionParams(
+            recipes_connection = StdioConnectionParams(
                     server_params=StdioServerParameters(
                         command="uv",
                         args=["run", recipes_path]
-                    )
                 )
+            )
 
-                recipes_toolset = McpToolset(
+            recipes_toolset = McpToolset(
                     connection_params=recipes_connection
-                )
+            )
 
-                tools.append(recipes_toolset)
-                print(f"[CHEF] ✅ Connected to recipes MCP server (using {recipes_path})")
+            tools.append(recipes_toolset)
+            print(f"[CHEF] ✅ Connected to recipes MCP server (using {recipes_path})")
 
         except Exception as e:
             print(f"[CHEF] ⚠️  Could not connect to recipes MCP: {e}")
@@ -111,23 +107,19 @@ if McpToolset:
         print(f"[CHEF] ⚠️  Could not find pantry_mcp_server.py in any of: {pantry_possible_paths}")
     else:
         try:
-            f_out = io.StringIO()
-            f_err = io.StringIO()
-
-            with redirect_stdout(f_out), redirect_stderr(f_err):
-                pantry_connection = StdioConnectionParams(
+            pantry_connection = StdioConnectionParams(
                     server_params=StdioServerParameters(
                         command="uv",
                         args=["run", pantry_path]
-                    )
                 )
+            )
 
-                pantry_toolset = McpToolset(
+            pantry_toolset = McpToolset(
                     connection_params=pantry_connection
-                )
+            )
 
-                tools.append(pantry_toolset)
-                print(f"[CHEF] ✅ Connected to pantry MCP server (using {pantry_path})")
+            tools.append(pantry_toolset)
+            print(f"[CHEF] ✅ Connected to pantry MCP server (using {pantry_path})")
 
         except Exception as e:
             print(f"[CHEF] ⚠️  Could not connect to pantry MCP: {e}")
@@ -150,23 +142,19 @@ if McpToolset:
         print(f"[CHEF] ⚠️  Could not find order_up_mcp_server.py in any of: {order_up_possible_paths}")
     else:
         try:
-            f_out = io.StringIO()
-            f_err = io.StringIO()
-
-            with redirect_stdout(f_out), redirect_stderr(f_err):
-                order_up_connection = StdioConnectionParams(
+            order_up_connection = StdioConnectionParams(
                     server_params=StdioServerParameters(
                         command="uv",
                         args=["run", order_up_path]
-                    )
                 )
+            )
 
-                order_up_toolset = McpToolset(
+            order_up_toolset = McpToolset(
                     connection_params=order_up_connection
-                )
+            )
 
-                tools.append(order_up_toolset)
-                print(f"[CHEF] ✅ Connected to order_up MCP server (using {order_up_path})")
+            tools.append(order_up_toolset)
+            print(f"[CHEF] ✅ Connected to order_up MCP server (using {order_up_path})")
 
         except Exception as e:
             print(f"[CHEF] ⚠️  Could not connect to order_up MCP: {e}")
@@ -217,6 +205,13 @@ IMPORTANT WORKFLOW:
 6. Add up all times (prep + cook + supplier delivery)
 7. Call accept_order with recipe name, prep_time, and cook_time (order ID is auto-generated)
 8. Respond with clear status including the order ID returned from accept_order
+
+DELIVERY NOTIFICATIONS:
+When the waiter notifies you that an order has been served/delivered to the customer:
+1. The waiter will send a message like "Order #3 has been delivered" or "Order 3 served"
+2. Extract the order_id from the message
+3. Use mark_order_delivered(order_id) to update the status from "ready" to "delivered"
+4. Respond with confirmation: "Order #3 marked as delivered. Thanks for letting me know!"
 
 Log all actions with [CHEF] prefix.
 

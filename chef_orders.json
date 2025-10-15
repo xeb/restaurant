@@ -1,1 +1,35 @@
-{"orders": {}, "next_order_id": 1}
+{
+  "orders": {
+    "1": {
+      "order_id": 1,
+      "recipe": "Avocado Toast",
+      "prep_time_minutes": 8,
+      "cook_time_minutes": 2,
+      "total_time_minutes": 10,
+      "status": "ready",
+      "accepted_at": "2025-10-15T14:13:32.907632",
+      "completed_at": "2025-10-15T14:13:32.907642"
+    },
+    "2": {
+      "order_id": 2,
+      "recipe": "Greek Salad",
+      "prep_time_minutes": 15,
+      "cook_time_minutes": 0,
+      "total_time_minutes": 15,
+      "status": "ready",
+      "accepted_at": "2025-10-15T14:18:57.358424",
+      "completed_at": "2025-10-15T14:18:57.358431"
+    },
+    "3": {
+      "order_id": 3,
+      "recipe": "Grilled Salmon with Vegetables",
+      "prep_time_minutes": 10,
+      "cook_time_minutes": 20,
+      "total_time_minutes": 30,
+      "status": "ready",
+      "accepted_at": "2025-10-15T14:36:53.828718",
+      "completed_at": "2025-10-15T14:36:53.828726"
+    }
+  },
+  "next_order_id": 4
+}

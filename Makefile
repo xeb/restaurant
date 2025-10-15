@@ -1,4 +1,4 @@
-.PHONY: help supplier supplier-cli supplier-web chef chef-cli chef-web waiter waiter-cli waiter-web cli test test-webapp test-all test-orders clean stop check-supplier check-chef check-waiter all status
+.PHONY: help supplier supplier-cli supplier-web chef chef-cli chef-web waiter waiter-cli waiter-web cli test test-webapp test-all test-orders clean clear stop check-supplier check-chef check-waiter all status
 
 .DEFAULT_GOAL := help
 
@@ -209,22 +209,34 @@ test-orders: ## Setup and test waiter orders feature via make cli
 
 stop: ## Stop all agent servers (A2A and web)
 	@echo "🛑 Stopping all agents..."
-	@pkill -f "uv run.*a2a_server.py" || true
-	@pkill -f "webapp.py" || true
-	@pkill -f "interactive_cli.py" || true
-	@lsof -ti:$(WAITER_PORT) | xargs kill -9 2>/dev/null || true
-	@lsof -ti:$(CHEF_PORT) | xargs kill -9 2>/dev/null || true
-	@lsof -ti:$(SUPPLIER_PORT) | xargs kill -9 2>/dev/null || true
-	@lsof -ti:$(WAITER_WEB_PORT) | xargs kill -9 2>/dev/null || true
-	@lsof -ti:$(CHEF_WEB_PORT) | xargs kill -9 2>/dev/null || true
-	@lsof -ti:$(SUPPLIER_WEB_PORT) | xargs kill -9 2>/dev/null || true
+	@echo "  Killing processes on agent ports..."
+	@-lsof -ti:$(WAITER_PORT) 2>/dev/null | xargs -r kill -9 2>/dev/null
+	@-lsof -ti:$(CHEF_PORT) 2>/dev/null | xargs -r kill -9 2>/dev/null
+	@-lsof -ti:$(SUPPLIER_PORT) 2>/dev/null | xargs -r kill -9 2>/dev/null
+	@-lsof -ti:$(WAITER_WEB_PORT) 2>/dev/null | xargs -r kill -9 2>/dev/null
+	@-lsof -ti:$(CHEF_WEB_PORT) 2>/dev/null | xargs -r kill -9 2>/dev/null
+	@-lsof -ti:$(SUPPLIER_WEB_PORT) 2>/dev/null | xargs -r kill -9 2>/dev/null
+	@echo "  Cleaning up any remaining agent processes..."
+	@-pgrep -f "bin/python3 webapp.py" 2>/dev/null | grep -v $$$$ | xargs -r kill -9 2>/dev/null
+	@-pgrep -f "bin/python3.*a2a_server.py" 2>/dev/null | grep -v $$$$ | xargs -r kill -9 2>/dev/null
+	@-pgrep -f "uv run webapp.py" 2>/dev/null | grep -v $$$$ | xargs -r kill -9 2>/dev/null
+	@-pgrep -f "uv run.*a2a_server.py" 2>/dev/null | grep -v $$$$ | xargs -r kill -9 2>/dev/null
+	@-pgrep -f "interactive_cli.py" 2>/dev/null | grep -v $$$$ | xargs -r kill -9 2>/dev/null
 	@sleep 1
-	@echo "✅ All agents stopped (A2A servers and web interfaces)"
+	@echo "✅ All agents stopped"
 
 clean: stop ## Clean up logs and temporary files
 	@echo "🧹 Cleaning up..."
 	@rm -f /tmp/supplier.log /tmp/chef.log /tmp/waiter_test.log
 	@echo "✅ Cleanup complete"
+
+clear: ## Clear all order data (resets orders.json and chef_orders.json)
+	@echo "🗑️  Clearing order data..."
+	@echo '{"orders": {}, "next_order_id": 1}' > orders.json
+	@echo '{"orders": {}, "next_order_id": 1}' > chef_orders.json
+	@echo "✅ Order data cleared:"
+	@echo "  - orders.json reset to empty state"
+	@echo "  - chef_orders.json reset to empty state"
 
 status: ## Check status of all agents (unified web + A2A on ports 8001-8003)
 	@echo "Agent Status (Unified Web + A2A Endpoints)"

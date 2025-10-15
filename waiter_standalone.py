@@ -76,6 +76,46 @@ if McpToolset:
         except Exception as e:
             print(f"[WAITER STANDALONE] ⚠️  Could not connect to orders MCP: {e}")
 
+# Add menu MCP tools
+if McpToolset:
+    # Try to find menu_mcp_server.py in multiple locations
+    menu_possible_paths = [
+        "menu_mcp_server.py",           # When running from root (webapp)
+        "../menu_mcp_server.py",        # When running from waiter/ directory
+    ]
+
+    menu_path = None
+    for path in menu_possible_paths:
+        if os.path.exists(path):
+            # Convert to absolute path so it works regardless of current directory
+            menu_path = os.path.abspath(path)
+            break
+
+    if menu_path is None:
+        print(f"[WAITER STANDALONE] ⚠️  Could not find menu_mcp_server.py in any of: {menu_possible_paths}")
+    else:
+        try:
+            f_out = io.StringIO()
+            f_err = io.StringIO()
+
+            with redirect_stdout(f_out), redirect_stderr(f_err):
+                menu_connection = StdioConnectionParams(
+                    server_params=StdioServerParameters(
+                        command="uv",
+                        args=["run", menu_path]
+                    )
+                )
+
+                menu_toolset = McpToolset(
+                    connection_params=menu_connection
+                )
+
+                tools.append(menu_toolset)
+                print(f"[WAITER STANDALONE] ✅ Connected to menu MCP server (using {menu_path})")
+
+        except Exception as e:
+            print(f"[WAITER STANDALONE] ⚠️  Could not connect to menu MCP: {e}")
+
 # Create the waiter agent
 root_agent = Agent(
     name="waiter_agent",
@@ -91,6 +131,26 @@ AVAILABLE TOOLS:
 - get_order_status(order_id) - Check specific order status
 - list_orders() - List all outstanding orders
 - chef_agent(message) - Send order to the chef
+- list_menu(category) - List all menu items, optionally filtered by category
+- get_menu_item(item_name) - Get detailed description of a specific menu item
+- list_categories() - Get all menu categories
+- search_menu(query) - Search menu by keyword
+
+HANDLING MENU QUESTIONS:
+When customer asks "What do you have on the menu?" or "What can I order?":
+1. Use list_menu() to get all menu items
+2. Present them in an organized, appealing way by category
+3. Highlight a few signature dishes with their artisanal descriptions
+4. Offer to provide more details on any item
+
+When customer asks about a specific item:
+1. Use get_menu_item(item_name) to get the full description
+2. Share the artisanal description, price, and dietary information
+3. Mention prep/cook time if they ask
+
+When customer asks about dietary options (vegan, gluten-free, etc.):
+1. Use search_menu(query) with the dietary term
+2. List matching items with their descriptions
 
 WORKFLOW FOR TAKING AN ORDER:
 1. First interaction: ALWAYS ask "Welcome! May I have your name please?"

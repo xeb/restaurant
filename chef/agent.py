@@ -132,6 +132,45 @@ if McpToolset:
         except Exception as e:
             print(f"[CHEF] ⚠️  Could not connect to pantry MCP: {e}")
 
+# Add order_up MCP tools
+if McpToolset:
+    # Try to find order_up_mcp_server.py in multiple locations
+    order_up_possible_paths = [
+        "order_up_mcp_server.py",           # When running from root (webapp)
+        "../order_up_mcp_server.py",        # When running from chef/ (a2a_server)
+    ]
+
+    order_up_path = None
+    for path in order_up_possible_paths:
+        if os.path.exists(path):
+            order_up_path = os.path.abspath(path)
+            break
+
+    if order_up_path is None:
+        print(f"[CHEF] ⚠️  Could not find order_up_mcp_server.py in any of: {order_up_possible_paths}")
+    else:
+        try:
+            f_out = io.StringIO()
+            f_err = io.StringIO()
+
+            with redirect_stdout(f_out), redirect_stderr(f_err):
+                order_up_connection = StdioConnectionParams(
+                    server_params=StdioServerParameters(
+                        command="uv",
+                        args=["run", order_up_path]
+                    )
+                )
+
+                order_up_toolset = McpToolset(
+                    connection_params=order_up_connection
+                )
+
+                tools.append(order_up_toolset)
+                print(f"[CHEF] ✅ Connected to order_up MCP server (using {order_up_path})")
+
+        except Exception as e:
+            print(f"[CHEF] ⚠️  Could not connect to order_up MCP: {e}")
+
 # Add supplier agent as a tool (A2A)
 try:
     print("[CHEF] Connecting to supplier agent via A2A...")
@@ -163,7 +202,8 @@ Your job is to:
 4. If ingredients are available, take them using take_ingredients
 5. If ingredients are missing, order from supplier using the supplier_agent tool
 6. Calculate total time needed (prep + cook time from recipe + any supplier wait time)
-7. Respond with the time estimate and status
+7. Use accept_order to mark the order as ready with timing details (it returns an auto-generated order ID)
+8. Respond with the order ID, time estimate and status
 
 IMPORTANT WORKFLOW:
 1. ALWAYS use list_recipes first to find the recipe ID
@@ -175,19 +215,20 @@ IMPORTANT WORKFLOW:
    - Call supplier_agent to order them (it will wait and restock)
    - Then retry take_ingredients
 6. Add up all times (prep + cook + supplier delivery)
-7. Respond with clear status and time estimate
+7. Call accept_order with recipe name, prep_time, and cook_time (order ID is auto-generated)
+8. Respond with clear status including the order ID returned from accept_order
 
 Log all actions with [CHEF] prefix.
 
 Example response format:
-"Order received for Greek Salad. Checked pantry - all ingredients available.
-Prep time: 15 min, Cook time: 0 min. Total time: 15 minutes. Starting preparation now!"
+"Order #3 received for Greek Salad. Checked pantry - all ingredients available.
+Prep time: 15 min, Cook time: 0 min. Total time: 15 minutes. Order ready!"
 
 Or if ingredients needed:
-"Order received for Grilled Salmon. Missing 2 units of salmon. Ordering from supplier...
+"Order #4 received for Grilled Salmon. Missing 2 units of salmon. Ordering from supplier...
 [wait for supplier delivery]
 Ingredients restocked. Prep time: 10 min, Cook time: 20 min, Supplier wait: 3 min.
-Total time: 33 minutes. Starting preparation now!"
+Total time: 33 minutes. Order ready!"
 """,
     tools=tools
 )

@@ -1,0 +1,94 @@
+{
+  "menu": {
+    "Quinoa Buddha Bowl": {
+      "name": "Quinoa Buddha Bowl",
+      "category": "Healthy Bowls",
+      "description": "A vibrant, nourishing bowl featuring organic quinoa crowned with perfectly ripe avocado, crispy chickpeas, and garden-fresh vegetables. Finished with our house-made tahini-lemon dressing that brings bright, Mediterranean flavors to every bite.",
+      "price": "$16.99",
+      "dietary": ["vegetarian", "vegan", "gluten-free"],
+      "prep_time": "15 minutes",
+      "cook_time": "15 minutes"
+    },
+    "Grilled Salmon with Vegetables": {
+      "name": "Grilled Salmon with Vegetables",
+      "category": "Seafood",
+      "description": "Wild-caught salmon fillet, expertly grilled to flaky perfection with a delicate char and bright citrus notes. Accompanied by tender-crisp broccoli florets and colorful bell pepper medley, all kissed with aromatic garlic and herbs.",
+      "price": "$24.99",
+      "dietary": ["pescatarian", "gluten-free", "keto-friendly"],
+      "prep_time": "10 minutes",
+      "cook_time": "20 minutes"
+    },
+    "Chocolate Chip Cookies": {
+      "name": "Chocolate Chip Cookies",
+      "category": "Desserts",
+      "description": "Our signature chocolate chip cookies, baked fresh daily. Each cookie features a perfectly crispy edge giving way to a soft, chewy center loaded with generous chunks of premium chocolate. The secret? Real butter, a touch of vanilla, and lots of love.",
+      "price": "$8.99",
+      "dietary": ["vegetarian"],
+      "prep_time": "15 minutes",
+      "cook_time": "12 minutes"
+    },
+    "Greek Salad": {
+      "name": "Greek Salad",
+      "category": "Salads",
+      "description": "A taste of the Mediterranean in every forkful. Crisp cucumbers and vine-ripened tomatoes mingle with briny Kalamata olives and authentic feta cheese, all tossed in our traditional red wine vinaigrette with oregano. Simple, fresh, and absolutely delicious.",
+      "price": "$12.99",
+      "dietary": ["vegetarian", "gluten-free", "keto-friendly"],
+      "prep_time": "15 minutes",
+      "cook_time": "0 minutes"
+    },
+    "Beef Stir Fry": {
+      "name": "Beef Stir Fry",
+      "category": "Asian Fusion",
+      "description": "Tender strips of premium sirloin wok-tossed with crisp bell peppers and onions in our savory soy-ginger sauce. Served atop a bed of fragrant jasmine rice and garnished with fresh green onions. A harmonious balance of umami, sweetness, and heat.",
+      "price": "$19.99",
+      "dietary": ["dairy-free"],
+      "prep_time": "20 minutes",
+      "cook_time": "15 minutes"
+    },
+    "Avocado Toast": {
+      "name": "Avocado Toast",
+      "category": "Breakfast & Brunch",
+      "description": "Artisanal sourdough bread toasted to golden perfection, then generously layered with creamy, lime-kissed avocado mash. Topped with jewel-like cherry tomato halves, a drizzle of extra virgin olive oil, and your choice of finishing salt. California dreaming on a plate.",
+      "price": "$13.99",
+      "dietary": ["vegetarian", "vegan"],
+      "prep_time": "8 minutes",
+      "cook_time": "2 minutes"
+    },
+    "Vegetable Curry": {
+      "name": "Vegetable Curry",
+      "category": "Indian Inspired",
+      "description": "A warming, aromatic curry featuring cauliflower, carrots, and sweet peas simmered in a rich coconut milk sauce infused with curry spices, fresh ginger, and garlic. Served over fluffy basmati rice and garnished with fresh cilantro. Comfort in a bowl.",
+      "price": "$15.99",
+      "dietary": ["vegetarian", "vegan", "gluten-free", "dairy-free"],
+      "prep_time": "15 minutes",
+      "cook_time": "25 minutes"
+    },
+    "Pancakes": {
+      "name": "Pancakes",
+      "category": "Breakfast & Brunch",
+      "description": "A stack of three fluffy, golden pancakes made from our time-tested recipe. Each pancake is light as air with a tender crumb, served with warm maple syrup and a pat of butter. The breakfast that brings back childhood memories.",
+      "price": "$11.99",
+      "dietary": ["vegetarian"],
+      "prep_time": "10 minutes",
+      "cook_time": "15 minutes"
+    },
+    "Caesar Salad": {
+      "name": "Caesar Salad",
+      "category": "Salads",
+      "description": "The classic done right. Crisp romaine hearts tossed in our house-made Caesar dressing with anchovy, garlic, and lemon. Finished with shaved Parmesan cheese, fresh-cracked black pepper, and house-baked croutons for the perfect crunch.",
+      "price": "$13.99",
+      "dietary": ["pescatarian"],
+      "prep_time": "20 minutes",
+      "cook_time": "5 minutes"
+    },
+    "Smoothie Bowl": {
+      "name": "Smoothie Bowl",
+      "category": "Healthy Bowls",
+      "description": "A gorgeous, Instagram-worthy bowl blending frozen berries, banana, and nutrient-rich spinach into a thick, creamy base. Artfully topped with fresh banana slices, crunchy granola, toasted coconut flakes, and a drizzle of almond butter. Eat the rainbow!",
+      "price": "$14.99",
+      "dietary": ["vegetarian", "vegan", "gluten-free", "dairy-free"],
+      "prep_time": "10 minutes",
+      "cook_time": "0 minutes"
+    }
+  }
+}

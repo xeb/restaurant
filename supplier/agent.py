@@ -43,7 +43,7 @@ except ImportError:
     McpToolset = None
 
 def wait_time(item: str, quantity: int) -> dict:
-    """Simulate waiting for supplier delivery.
+    """Simulate waiting for supplier delivery (instant for fast UI).
 
     Args:
         item: The ingredient being supplied
@@ -52,17 +52,13 @@ def wait_time(item: str, quantity: int) -> dict:
     Returns:
         Status and wait time information
     """
-    wait_seconds = random.randint(2, 5)
-    print(f"[SUPPLIER] 📦 Preparing {quantity} units of {item}... (will take {wait_seconds} seconds)")
-
-    time.sleep(wait_seconds)
-
+    print(f"[SUPPLIER] 📦 Preparing {quantity} units of {item}...")
     print(f"[SUPPLIER] ✅ {item} ready for delivery!")
 
     return {
         "item": item,
         "quantity": quantity,
-        "wait_seconds": wait_seconds,
+        "wait_seconds": 0,
         "status": "ready_for_delivery"
     }
 
@@ -122,21 +118,37 @@ root_agent = Agent(
 
 Your job is to:
 1. Receive orders for ingredients from the chef
-2. Use the wait_time tool to simulate preparing/delivering each ingredient type
-3. After waiting, use the pantry tools to add_ingredients to restock the pantry
-4. Report back to the chef that the ingredients have been delivered
+2. FIRST, use list_pantry to check what ingredient names already exist in the pantry
+3. Match the requested ingredients to the EXACT names already in the pantry to avoid duplicates
+4. Use the wait_time tool to simulate preparing/delivering each ingredient type
+5. After waiting, use add_ingredients with the EXACT pantry names to restock
+6. Report back to the chef that the ingredients have been delivered
 
-IMPORTANT:
-- Always call wait_time FIRST for each ingredient order to simulate delivery time
-- After wait_time completes, call add_ingredients to add them to the pantry
-- Be clear and concise in your responses
-- Log all actions to stdout with [SUPPLIER] prefix
+CRITICAL RULES TO PREVENT DUPLICATES:
+- ALWAYS call list_pantry FIRST before adding any ingredients
+- Use the EXACT ingredient name that already exists in the pantry (e.g., if pantry has "tomatoes", use "tomatoes" NOT "tomato" or "cherry tomatoes")
+- Match ingredient variations to existing names:
+  * "tomato" → use "tomatoes" if it exists
+  * "cucumber" → use "cucumbers" if it exists
+  * "bell pepper" → use "bell peppers" if it exists
+  * "olive oil", "extra virgin olive oil" → use "olive oil" if it exists
+  * "feta" → use "feta cheese" if it exists
+  * "parmesan" → use "parmesan cheese" if it exists
+  * "romaine" → use "romaine lettuce" if it exists
+  * "salmon fillet" → use "salmon" if it exists
+  * "broccoli floret" → use "broccoli" if it exists
+- If unsure about the exact name, prefer the plural form or the name that's already in the pantry
+- NEVER create new ingredient variants like "red onion" if "onion" exists, or "dried oregano" if "oregano" exists
 
 Example flow:
-1. Chef orders: {"tomatoes": 10, "cheese": 5}
-2. You call wait_time for the order (simulating delivery)
-3. You call add_ingredients with the same quantities
-4. You respond: "Delivered 10 tomatoes and 5 cheese to the pantry"
+1. Chef orders: {"tomatoes": 10, "feta": 5}
+2. You call list_pantry to see existing names
+3. You see pantry has "tomatoes" and "feta cheese"
+4. You call wait_time for the order
+5. You call add_ingredients with {"tomatoes": 10, "feta cheese": 5} using EXACT pantry names
+6. You respond: "Delivered 10 tomatoes and 5 feta cheese to the pantry"
+
+Log all actions with [SUPPLIER] prefix.
 """,
     tools=tools
 )

@@ -7,65 +7,175 @@ A demonstration of **Agent-to-Agent (A2A)** communication using Google's Agent D
 ### High-Level Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        RESTAURANT MULTI-AGENT SYSTEM                    │
-│                                                                         │
-│  ┌──────────────┐         ┌──────────────┐         ┌──────────────┐     │
-│  │    WAITER    │  A2A    │     CHEF     │  A2A    │   SUPPLIER   │     │
-│  │   (CLI/Web)  │────────▶│  (Port 8002) │────────▶│  (Port 8003) │     │
-│  │  Port 5001   │         │              │         │              │     │
-│  └──────────────┘         └───────┬──────┘         └────────┬─────┘     │
-│                                   │                         │           │
-│                                   │ MCP                     │ MCP       │
-│                                   ▼                         ▼           │
-│                          ┌─────────────────┐      ┌─────────────────┐   │
-│                          │  Recipes MCP    │      │  Pantry MCP     │   │
-│                          │  (stdio)        │      │  (stdio)        │   │
-│                          └─────────────────┘      └─────────────────┘   │
-│                                   │                         │           │
-│                                   │ MCP                     │           │
-│                                   ▼                         │           │
-│                          ┌─────────────────┐                │           │
-│                          │  Pantry MCP     │◀───────────────┘           │
-│                          │  (stdio)        │                            │
-│                          └─────────────────┘                            │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│                          RESTAURANT MULTI-AGENT SYSTEM                             │
+│                                                                                    │
+│  ┌──────────────┐         ┌──────────────┐         ┌──────────────┐               │
+│  │    WAITER    │  A2A    │     CHEF     │  A2A    │   SUPPLIER   │               │
+│  │   (Web+A2A)  │────────▶│  (Web+A2A)   │────────▶│  (Web+A2A)   │               │
+│  │  Port 8001   │         │  Port 8002   │         │  Port 8003   │               │
+│  └──┬────────┬──┘         └──┬────────┬──┘         └──────┬───────┘               │
+│     │        │               │        │                   │                       │
+│     │ MCP    │ MCP           │ MCP    │ MCP               │ MCP                   │
+│     ▼        ▼               ▼        ▼                   ▼                       │
+│  ┌─────┐  ┌─────┐     ┌─────────┐ ┌──────────┐    ┌──────────┐                  │
+│  │Order│  │Menu │     │Order Up │ │ Recipes  │    │  Pantry  │                  │
+│  │ MCP │  │ MCP │     │   MCP   │ │   MCP    │    │   MCP    │                  │
+│  └──┬──┘  └─┬───┘     └────┬────┘ └────┬─────┘    └────┬─────┘                  │
+│     │       │              │           │               │                         │
+│     │r/w    │reads         │r/w        │hardcoded      │r/w      reads           │
+│     ▼       ▼              ▼           │               ▼           ▼             │
+│  ┌──────┐ ┌─────┐    ┌─────────┐      │        ┌──────────┐ ┌──────────┐        │
+│  │orders│ │menu │    │  chef   │      │        │  pantry  │ │   food   │        │
+│  │.json │ │.json│    │_orders  │      │        │  .json   │ │  .json   │        │
+│  │      │ │     │    │  .json  │      │        │(Food IDs)│ │(Food DB) │        │
+│  └──────┘ └─────┘    └─────────┘      └───────────────────┘ └──────────┘        │
+│                                                                                    │
+│  Features:                                                                        │
+│  • Unified Web + A2A endpoints on ports 8001-8003                                 │
+│  • A2A sessions visible in browser                                                │
+│  • Food ID system for ingredient tracking                                         │
+│  • Disk-reload for multi-process pantry consistency                               │
+│  • Duration tracking for agent responses                                          │
+│  • Normalized pantry view for debugging                                           │
+└────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Component Details
 
-#### 1. **Waiter Agent** (CLI or Web Interface)
+#### 1. **Waiter Agent** (Web + A2A on port 8001)
 - **Purpose**: Takes customer orders
 - **Communication**: Calls Chef via A2A (port 8002)
 - **Interface**:
-  - CLI: Interactive REPL
-  - Web: Flask app on port 5001
-- **Tools**: Chef agent (via RemoteA2aAgent)
+  - Web: Flask app with dual exposure (GET for UI, POST for A2A)
+  - A2A sessions visible in browser
+- **MCP Connections**:
+  - Orders MCP (stdio) - Customer order management
+  - Menu MCP (stdio) - Artisanal menu descriptions
+- **Tools**:
+  - `save_order` - Save customer orders (via Orders MCP)
+  - `list_orders` - List outstanding orders (via Orders MCP)
+  - `set_order_status` - Update order status (via Orders MCP)
+  - `get_order_status` - Check order status (via Orders MCP)
+  - `list_menu` - Browse menu items (via Menu MCP)
+  - `get_menu_item` - Get menu item details (via Menu MCP)
+  - `list_categories` - Get menu categories (via Menu MCP)
+  - `search_menu` - Search menu by keyword (via Menu MCP)
+  - Chef agent (via RemoteA2aAgent)
 
-#### 2. **Chef Agent** (A2A Server on port 8002)
+#### 2. **Chef Agent** (Web + A2A on port 8002)
 - **Purpose**: Prepares dishes based on orders
 - **Communication**:
   - Receives orders from Waiter (A2A)
   - Calls Supplier when ingredients needed (A2A port 8003)
+- **Interface**: Web + A2A dual exposure
 - **MCP Connections**:
-  - Recipes MCP (stdio) - Recipe database
-  - Pantry MCP (stdio) - Ingredient inventory
+  - Recipes MCP (stdio) - Recipe database (hardcoded recipes)
+  - Order Up MCP (stdio) - Chef's order completion tracking (auto-incrementing IDs)
+  - Pantry MCP (stdio) - Ingredient inventory (disk-reload enabled)
 - **Tools**:
-  - `list_recipes` - Browse available recipes
-  - `get_recipe` - Get recipe details
-  - `check_pantry` - Check ingredient availability
-  - `take_ingredients` - Remove ingredients from pantry
+  - `list_recipes` - Browse available recipes (via Recipes MCP)
+  - `get_recipe` - Get recipe details (via Recipes MCP)
+  - `accept_order` - Accept and complete orders with auto-generated ID (via Order Up MCP)
+  - `list_ready_orders` - List completed orders (via Order Up MCP)
+  - `get_order_status` - Check order status (via Order Up MCP)
+  - `check_pantry` - Check ingredient availability by Food ID (via Pantry MCP)
+  - `take_ingredients` - Remove ingredients from pantry by Food ID (via Pantry MCP)
+  - `list_foods` - Search food database (via Pantry MCP)
   - Supplier agent (via RemoteA2aAgent)
 
-#### 3. **Supplier Agent** (A2A Server on port 8003)
+#### 3. **Supplier Agent** (Web + A2A on port 8003)
 - **Purpose**: Supplies ingredients to the restaurant
 - **Communication**: Receives orders from Chef (A2A)
+- **Interface**: Web + A2A dual exposure
 - **MCP Connections**:
-  - Pantry MCP (stdio) - Restocks ingredients
+  - Pantry MCP (stdio) - Restocks ingredients (disk-reload enabled)
 - **Tools**:
   - `wait_time` - Simulates delivery (2-5 seconds)
-  - `add_ingredients` - Adds to pantry inventory
+  - `add_ingredients` - Adds to pantry inventory by Food ID (via Pantry MCP)
+  - `check_pantry` - Check stock levels by Food ID (via Pantry MCP)
+  - `get_low_stock_items` - Get items below threshold (via Pantry MCP)
+  - `list_foods` - Search food database (via Pantry MCP)
+
+#### 4. **MCP Servers**
+
+##### Orders MCP Server (`orders_mcp_server.py`)
+- **Purpose**: Manages customer orders for the waiter
+- **Storage**: `orders.json`
+- **Tools**:
+  - `save_order(name, order_details, estimated_wait_time)` - Create new order
+  - `list_orders()` - Get all outstanding orders (not SERVED)
+  - `set_order_status(order_id, status)` - Update order status
+  - `get_order_status(order_id)` - Check order status
+
+##### Menu MCP Server (`menu_mcp_server.py`)
+- **Purpose**: Provides artisanal menu descriptions for the waiter
+- **Storage**: `menu.json` (read-only)
+- **Tools**:
+  - `list_menu(category)` - List all menu items, optionally filtered by category
+  - `get_menu_item(item_name)` - Get detailed information about a specific menu item
+  - `list_categories()` - List all available menu categories
+  - `search_menu(query)` - Search menu items by keyword
+
+##### Order Up MCP Server (`order_up_mcp_server.py`)
+- **Purpose**: Tracks chef's order completion with auto-incrementing IDs
+- **Storage**: `chef_orders.json`
+- **Tools**:
+  - `accept_order(recipe, prep_time, cook_time)` - Accept and complete order (auto-generates order ID)
+  - `list_ready_orders()` - List all completed orders
+  - `get_order_status(order_id)` - Check order status
+
+##### Pantry MCP Server (`pantry_mcp_server.py`)
+- **Purpose**: Manages ingredient inventory using Food IDs with multi-process support
+- **Storage**: `pantry.json` (r/w), `food.json` (read-only)
+- **Key Feature**: Reloads from disk before each operation to prevent stale data in multi-process environments
+- **Tools**:
+  - `list_foods(search)` - Search food database by name
+  - `list_pantry()` - List all pantry items with names (reloads from disk)
+  - `check_pantry(food_id)` - Check quantity of specific Food ID (reloads from disk)
+  - `take_ingredients(ingredients)` - Remove ingredients by Food ID (reloads from disk)
+  - `add_ingredients(ingredients)` - Add ingredients by Food ID (reloads from disk)
+  - `get_low_stock_items(threshold)` - Get items below threshold (reloads from disk)
+
+##### Recipes MCP Server (`chef/recipes_mcp_server.py`)
+- **Purpose**: Provides recipe database for the chef
+- **Storage**: Hardcoded recipes (no JSON file)
+- **Tools**:
+  - `list_recipes()` - Get all available recipes
+  - `get_recipe(recipe_name)` - Get recipe details with ingredients
+
+#### 5. **JSON Data Files**
+
+##### `food.json` (Food Database)
+- **Purpose**: Single source of truth for all foods in the system
+- **Structure**: Maps Food ID → {id, name}
+- **Used by**: Pantry MCP Server (read-only for name lookups)
+- **Count**: 77 food items (IDs 1-77)
+- **Example**: `"61": {"id": 61, "name": "pepper"}`
+
+##### `menu.json` (Customer Menu)
+- **Purpose**: Artisanal menu descriptions for customer-facing interactions
+- **Structure**: Maps menu item name → {name, category, description, price, dietary, prep_time, cook_time}
+- **Used by**: Menu MCP Server (read-only)
+- **Example**: `"Greek Salad": {"name": "Greek Salad", "category": "Salads", "description": "A taste of the Mediterranean...", ...}`
+
+##### `pantry.json` (Inventory)
+- **Purpose**: Tracks available ingredient quantities
+- **Structure**: Maps Food ID → quantity
+- **Used by**: Pantry MCP Server (read/write)
+- **Example**: `"61": 1000` (1000 units of pepper)
+
+##### `orders.json` (Customer Orders)
+- **Purpose**: Tracks customer orders from the waiter
+- **Structure**: Maps order_id → {order_id, name, order_details, estimated_wait_time, status, timestamps}
+- **Used by**: Orders MCP Server (read/write)
+- **Statuses**: RECEIVED, COOKING, READY, SERVED
+
+##### `chef_orders.json` (Chef's Order Queue)
+- **Purpose**: Tracks chef's order completion
+- **Structure**: Maps order_id → {order_id, recipe, prep_time, cook_time, total_time, status, timestamps}
+- **Used by**: Order Up MCP Server (read/write)
+- **Status**: ready (orders complete instantly in this simulation)
 
 ### Data Flow Example
 
@@ -194,19 +304,16 @@ This project can also be used with the Gemini CLI. For detailed instructions, pl
 | Command | Description |
 |---------|-------------|
 | `make help` | Show all available commands |
-| **A2A Servers** | |
-| `make supplier` | Start supplier A2A server (port 8003) |
-| `make chef` | Start chef A2A server (port 8002, requires supplier) |
-| **Web Interfaces** | |
-| `make waiter-web` | Start waiter web UI (port 5001, requires chef) |
-| `make chef-web` | Start chef web UI (port 5002, requires supplier) |
-| `make supplier-web` | Start supplier web UI (port 5003) |
-| **CLI Interface** | |
-| `make waiter` | Start waiter CLI (requires chef) |
+| **Unified Web + A2A** | |
+| `make supplier` | Start supplier (Web + A2A on port 8003) |
+| `make chef` | Start chef (Web + A2A on port 8002, requires supplier) |
+| `make waiter` | Start waiter (Web + A2A on port 8001, requires chef) |
 | **Utilities** | |
 | `make status` | Check which agents are running |
 | `make stop` | Stop all agents |
 | `make clean` | Clean up logs and temp files |
+| `make clear` | Clear all order data (resets orders.json and chef_orders.json) |
+| **Testing** | |
 | `make test` | Run automated test suite |
 | `make test-simple` | Run simple order test |
 
@@ -217,11 +324,15 @@ The web interface (`webapp.py`) provides a rich, interactive experience:
 ### Features
 
 - **🎯 Multi-Agent Support**: Single webapp handles all agents via `--agent` flag
+- **🔄 Unified Endpoints**: Web UI (GET) and A2A protocol (POST) on the same port
 - **💬 Real-time Chat**: Interactive chat interface with markdown rendering
-- **📊 Session Management**: View all active sessions with message counts
+- **⏱️ Duration Tracking**: Displays response time for each agent message (e.g., "5 min, 27 sec")
+- **📊 Session Management**: View all active sessions (including A2A sessions!)
 - **🔧 Tool Call Inspection**: Expandable UI showing tool arguments and results
 - **🔄 A2A Call Tracking**: Special highlighting for inter-agent communication
 - **💾 Persistent History**: Sessions survive page refreshes
+- **🗂️ Data Views**: Browse JSON files (menu, food, pantry, orders) via Data menu
+- **🐛 Normalized Pantry**: Debug view merging food.json and pantry.json
 - **🎨 Clean UI**: Tailwind CSS, responsive design, Inter font
 
 ### Visual Elements
@@ -286,25 +397,37 @@ restaurant/
 ├── README.md                    # This file
 ├── GEMINI.md                    # Gemini CLI instructions
 ├── WEBAPP.md                    # Web interface documentation
-├── Makefile                     # Build commands
-├── webapp.py                    # Flask web interface (all agents)
+├── Makefile                     # Build commands (includes 'make clear')
+├── webapp.py                    # Flask web interface (all agents, unified Web + A2A)
 ├── waiter_standalone.py         # Waiter agent for webapp
 ├── test.sh                      # Automated CLI test
 ├── test_webapp.sh              # Automated webapp test
-├── pantry_mcp_server.py        # Shared pantry MCP server
+│
+├── MCP Servers:
+├── pantry_mcp_server.py        # Pantry inventory MCP server (Food IDs, disk-reload)
+├── menu_mcp_server.py          # Menu MCP server (artisanal descriptions)
+├── orders_mcp_server.py        # Waiter orders MCP server
+├── order_up_mcp_server.py      # Chef orders MCP server (auto-incrementing IDs)
+│
+├── JSON Data Files:
+├── food.json                   # Food database (77 items, Food ID → name)
+├── menu.json                   # Customer menu (artisanal descriptions)
+├── pantry.json                 # Pantry inventory (Food ID → quantity)
+├── orders.json                 # Customer orders (waiter)
+├── chef_orders.json            # Chef's completed orders
 │
 ├── supplier/
 │   ├── agent.py                # Supplier agent definition
-│   └── a2a_server.py           # A2A server wrapper (port 8003)
+│   └── a2a_server.py           # A2A server wrapper (legacy, not used with webapp)
 │
 ├── chef/
 │   ├── agent.py                # Chef agent definition
-│   ├── a2a_server.py           # A2A server wrapper (port 8002)
-│   └── recipes_mcp_server.py   # Recipes MCP server
+│   ├── a2a_server.py           # A2A server wrapper (legacy, not used with webapp)
+│   └── recipes_mcp_server.py   # Recipes MCP server (hardcoded recipes)
 │
 └── waiter/
-    ├── cli.py                  # Interactive CLI (ADK Runner)
-    └── simple_client.py        # Direct A2A test client
+    ├── cli.py                  # Interactive CLI (legacy)
+    └── simple_client.py        # Direct A2A test client (legacy)
 ```
 
 ## 🔧 Technical Details

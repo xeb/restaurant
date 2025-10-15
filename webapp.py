@@ -66,14 +66,49 @@ HTML_TEMPLATE = '''
         .tool-message { background-color: #fdf2f8; margin-right: 2rem; border-left: 4px solid #ec4899; }
         .a2a-message { background-color: #fef3c7; margin-right: 2rem; border-left: 4px solid #f59e0b; }
         .banner-gradient { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .dropdown { position: relative; display: inline-block; }
+        .dropdown-content { display: none; position: absolute; right: 0; background-color: white; min-width: 200px; box-shadow: 0px 8px 16px rgba(0,0,0,0.1); z-index: 1000; border-radius: 0.5rem; margin-top: 0.125rem; padding-top: 0.25rem; }
+        .dropdown:hover .dropdown-content { display: block; }
+        .dropdown-content a { color: #374151; padding: 12px 16px; text-decoration: none; display: block; transition: background 0.2s; }
+        .dropdown-content a:hover { background-color: #f3f4f6; }
     </style>
 </head>
 <body class="bg-white text-gray-800 antialiased">
     <div class="flex flex-col h-screen">
         <header class="banner-gradient text-white border-b border-gray-200">
-            <div class="px-8 py-6">
-                <h1 class="text-4xl font-bold tracking-tight">🍽️ Restaurant - {{ agent_name }}</h1>
-                <p class="text-sm opacity-90 mt-1">Multi-Agent System on port {{ agent_port }}</p>
+            <div class="px-8 py-4 flex justify-between items-center">
+                <div>
+                    <h1 class="text-4xl font-bold tracking-tight">🍽️ Restaurant - {{ agent_name }}</h1>
+                    <p class="text-sm opacity-90 mt-1">Multi-Agent System on port {{ agent_port }}</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <!-- Agents Menu -->
+                    <div class="dropdown">
+                        <button class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg font-medium transition-all">
+                            Agents ▾
+                        </button>
+                        <div class="dropdown-content">
+                            <a href="https://waiter.xeb.ai" target="_blank">Waiter</a>
+                            <a href="https://chef.xeb.ai" target="_blank">Chef</a>
+                            <a href="https://supplier.xeb.ai" target="_blank">Supplier</a>
+                        </div>
+                    </div>
+
+                    <!-- Data Menu -->
+                    <div class="dropdown">
+                        <button class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg font-medium transition-all">
+                            Data ▾
+                        </button>
+                        <div class="dropdown-content">
+                            <a href="/data/menu.json" target="_blank">Menu</a>
+                            <a href="/data/food.json" target="_blank">Food Database</a>
+                            <a href="/data/pantry.json" target="_blank">Pantry Inventory</a>
+                            <a href="/data/pantry-normalized" target="_blank">Pantry (Normalized)</a>
+                            <a href="/data/orders.json" target="_blank">Waiter Orders</a>
+                            <a href="/data/chef_orders.json" target="_blank">Chef Orders</a>
+                        </div>
+                    </div>
+                </div>
             </div>
         </header>
 
@@ -105,8 +140,11 @@ HTML_TEMPLATE = '''
 
                     <!-- Right: Sessions List -->
                     <div class="w-1/3 bg-white rounded-lg border border-gray-200 flex flex-col h-full">
-                        <div class="p-4 border-b border-gray-200">
+                        <div class="p-4 border-b border-gray-200 flex justify-between items-center">
                             <h3 class="text-lg font-semibold">Active Sessions</h3>
+                            <button onclick="createNewSession()" class="bg-blue-500 hover:bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center text-xl font-bold" title="Create New Session">
+                                +
+                            </button>
                         </div>
                         <div id="sessionsList" class="flex-1 p-6 overflow-y-auto">
                             <div id="sessionsPlaceholder" class="text-center text-gray-500 mt-8">
@@ -125,6 +163,7 @@ HTML_TEMPLATE = '''
 
     <script>
         let sessionId = localStorage.getItem('sessionId') || generateSessionId();
+        let thinkingBubbleId = null;
 
         function generateSessionId() {
             const id = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -132,10 +171,47 @@ HTML_TEMPLATE = '''
             return id;
         }
 
+        function formatDuration(milliseconds) {
+            const seconds = Math.floor(milliseconds / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+
+            if (minutes === 0) {
+                return `${remainingSeconds} sec`;
+            } else {
+                return `${minutes} min, ${remainingSeconds} sec`;
+            }
+        }
+
         function handleKeyPress(event) {
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
                 sendMessage();
+            }
+        }
+
+        function showThinkingIndicator() {
+            const container = document.getElementById('chatContainer');
+            const thinkingDiv = document.createElement('div');
+            thinkingBubbleId = 'thinking-' + Date.now();
+            thinkingDiv.id = thinkingBubbleId;
+            thinkingDiv.className = 'chat-message agent-message';
+            thinkingDiv.innerHTML = `
+                <div class="font-medium mb-2">{{ agent_name }}</div>
+                <div class="flex items-center space-x-2">
+                    <div class="animate-pulse">💭</div>
+                    <div class="text-gray-500 italic">Thinking...</div>
+                </div>
+            `;
+            container.appendChild(thinkingDiv);
+            container.scrollTop = container.scrollHeight;
+            return thinkingBubbleId;
+        }
+
+        function removeThinkingIndicator(bubbleId) {
+            if (bubbleId) {
+                const bubble = document.getElementById(bubbleId);
+                if (bubble) bubble.remove();
             }
         }
 
@@ -147,6 +223,9 @@ HTML_TEMPLATE = '''
             input.value = '';
             addMessage('user', message);
 
+            const thinkingId = showThinkingIndicator();
+            const startTime = Date.now();
+
             fetch('/send', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -154,6 +233,9 @@ HTML_TEMPLATE = '''
             })
             .then(response => response.json())
             .then(data => {
+                const duration = Date.now() - startTime;
+                removeThinkingIndicator(thinkingId);
+
                 if (data.error) {
                     addMessage('system', 'Error: ' + data.error);
                     return;
@@ -173,19 +255,20 @@ HTML_TEMPLATE = '''
                     });
                 }
 
-                // Add response
+                // Add response with duration
                 if (data.response) {
-                    addMessage('agent', data.response);
+                    addMessage('agent', data.response, duration);
                 }
 
                 refreshSessions();
             })
             .catch(error => {
+                removeThinkingIndicator(thinkingId);
                 addMessage('system', 'Connection error: ' + error.message);
             });
         }
 
-        function addMessage(type, content) {
+        function addMessage(type, content, duration) {
             const container = document.getElementById('chatContainer');
             const messageDiv = document.createElement('div');
             messageDiv.className = `chat-message ${type}-message`;
@@ -193,10 +276,16 @@ HTML_TEMPLATE = '''
             const label = type === 'user' ? 'You' : type === 'agent' ? '{{ agent_name }}' : 'System';
             let formattedContent = type === 'agent' ? marked.parse(content) : content;
 
+            // Build footer with time and optional duration
+            let footer = new Date().toLocaleTimeString();
+            if (type === 'agent' && duration !== undefined) {
+                footer += ` • Duration: ${formatDuration(duration)}`;
+            }
+
             messageDiv.innerHTML = `
                 <div class="font-medium mb-2">${label}</div>
                 <div class="whitespace-pre-wrap">${formattedContent}</div>
-                <div class="text-xs text-gray-500 mt-2">${new Date().toLocaleTimeString()}</div>
+                <div class="text-xs text-gray-500 mt-2">${footer}</div>
             `;
 
             container.appendChild(messageDiv);
@@ -293,11 +382,53 @@ HTML_TEMPLATE = '''
             });
         }
 
+        function createNewSession() {
+            document.getElementById('chatContainer').innerHTML = '';
+            sessionId = generateSessionId();
+            refreshSessions();
+            document.getElementById('userInput').focus();
+        }
+
         function refreshSessions() {
             fetch('/sessions')
             .then(response => response.json())
             .then(data => {
                 displaySessions(data.sessions || []);
+            });
+        }
+
+        function loadSession(sid) {
+            // Clear current chat
+            document.getElementById('chatContainer').innerHTML = '';
+
+            // Update active session
+            sessionId = sid;
+            localStorage.setItem('sessionId', sid);
+
+            // Load history for this session
+            fetch('/history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: sid })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.history) {
+                    data.history.forEach(entry => {
+                        if (entry.type === 'user') {
+                            addMessage('user', entry.content);
+                        } else if (entry.type === 'agent') {
+                            if (entry.tool_calls) {
+                                entry.tool_calls.forEach(tc => addToolMessage(tc.name, tc.arguments, tc.result));
+                            }
+                            if (entry.a2a_calls) {
+                                entry.a2a_calls.forEach(ac => addA2AMessage(ac));
+                            }
+                            addMessage('agent', entry.content);
+                        }
+                    });
+                }
+                refreshSessions();
             });
         }
 
@@ -315,7 +446,7 @@ HTML_TEMPLATE = '''
             const sessionsList = sessions.map(session => {
                 const isActive = session.id === sessionId;
                 return `
-                    <div class="border ${isActive ? 'border-blue-500 bg-blue-50' : 'border-gray-200'} rounded-lg p-3 mb-2">
+                    <div onclick="loadSession('${session.id}')" class="border ${isActive ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-400 cursor-pointer'} rounded-lg p-3 mb-2 transition-colors">
                         <div class="flex items-start justify-between">
                             <div class="flex-1">
                                 <h4 class="font-medium text-gray-900 text-sm">${session.id.substring(0, 20)}...</h4>
@@ -608,6 +739,250 @@ def get_sessions():
     except Exception as e:
         return jsonify({'error': str(e)})
 
+@app.route('/data/<filename>')
+def serve_json_data(filename):
+    """Serve JSON data files with formatted display."""
+    try:
+        # Security: only allow specific JSON files
+        allowed_files = ['menu.json', 'food.json', 'pantry.json', 'orders.json', 'chef_orders.json']
+
+        if filename not in allowed_files:
+            return f"<html><body><h1>Error</h1><p>File '{filename}' not allowed</p></body></html>", 403
+
+        # Try to read the JSON file
+        if not os.path.exists(filename):
+            return f"""
+            <html>
+            <head>
+                <title>{filename}</title>
+                <style>
+                    body {{ font-family: 'Inter', sans-serif; margin: 40px; background: #f9fafb; }}
+                    .container {{ max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
+                    h1 {{ color: #374151; }}
+                    .warning {{ background: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 4px; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>{filename}</h1>
+                    <div class="warning">
+                        <strong>File not found</strong><br>
+                        The file <code>{filename}</code> does not exist yet. It will be created once the system generates data.
+                    </div>
+                </div>
+            </body>
+            </html>
+            """, 404
+
+        with open(filename, 'r') as f:
+            json_data = json.load(f)
+
+        # Format JSON for display
+        formatted_json = json.dumps(json_data, indent=2)
+
+        # Return HTML page with formatted JSON
+        html = f"""
+        <html>
+        <head>
+            <title>{filename}</title>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+            <style>
+                body {{
+                    font-family: 'Inter', sans-serif;
+                    margin: 40px;
+                    background: #f9fafb;
+                }}
+                .container {{
+                    max-width: 900px;
+                    margin: 0 auto;
+                    background: white;
+                    padding: 30px;
+                    border-radius: 8px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                }}
+                h1 {{
+                    color: #374151;
+                    margin-bottom: 20px;
+                }}
+                .json-display {{
+                    background: #1f2937;
+                    color: #f3f4f6;
+                    padding: 20px;
+                    border-radius: 6px;
+                    overflow-x: auto;
+                    font-family: 'Monaco', 'Courier New', monospace;
+                    font-size: 14px;
+                    line-height: 1.5;
+                    white-space: pre;
+                }}
+                .back-link {{
+                    display: inline-block;
+                    margin-bottom: 20px;
+                    color: #667eea;
+                    text-decoration: none;
+                    font-weight: 500;
+                }}
+                .back-link:hover {{
+                    text-decoration: underline;
+                }}
+                .meta {{
+                    color: #6b7280;
+                    font-size: 14px;
+                    margin-bottom: 16px;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <a href="javascript:history.back()" class="back-link">← Back</a>
+                <h1>{filename}</h1>
+                <div class="meta">
+                    Last modified: {datetime.fromtimestamp(os.path.getmtime(filename)).strftime('%Y-%m-%d %H:%M:%S')}
+                </div>
+                <div class="json-display">{formatted_json}</div>
+            </div>
+        </body>
+        </html>
+        """
+
+        return html
+
+    except json.JSONDecodeError as e:
+        return f"""
+        <html>
+        <body>
+            <h1>Error</h1>
+            <p>Failed to parse {filename} as JSON: {str(e)}</p>
+        </body>
+        </html>
+        """, 500
+    except Exception as e:
+        return f"<html><body><h1>Error</h1><p>{str(e)}</p></body></html>", 500
+
+@app.route('/data/pantry-normalized')
+def serve_normalized_pantry():
+    """Serve normalized pantry view - merges pantry.json and food.json."""
+    try:
+        # Load food database
+        food_data = {}
+        if os.path.exists('food.json'):
+            with open('food.json', 'r') as f:
+                food_json = json.load(f)
+                food_data = food_json.get('foods', {})
+
+        # Load pantry inventory
+        pantry_data = {}
+        if os.path.exists('pantry.json'):
+            with open('pantry.json', 'r') as f:
+                pantry_data = json.load(f)
+
+        # Merge the data
+        merged_items = []
+
+        # Get all food IDs from both sources
+        all_food_ids = set(food_data.keys()) | set(pantry_data.keys())
+
+        for food_id in sorted(all_food_ids, key=lambda x: int(x)):
+            food_info = food_data.get(food_id, {})
+            food_name = food_info.get('name', f'Unknown (ID {food_id})')
+            quantity = pantry_data.get(food_id, 0)
+
+            merged_items.append({
+                'id': int(food_id),
+                'name': food_name,
+                'quantity': quantity
+            })
+
+        # Generate HTML table rows
+        table_rows = ''
+        for item in merged_items:
+            # Color code based on quantity
+            if item['quantity'] == 0:
+                row_class = 'bg-red-50'
+                quantity_class = 'text-red-700 font-bold'
+            elif item['quantity'] <= 3:
+                row_class = 'bg-yellow-50'
+                quantity_class = 'text-yellow-700 font-semibold'
+            else:
+                row_class = ''
+                quantity_class = 'text-gray-900'
+
+            table_rows += f'''
+                <tr class="{row_class}">
+                    <td class="px-4 py-2 text-sm text-gray-700">{item['id']}</td>
+                    <td class="px-4 py-2 text-sm text-gray-900 font-medium">{item['name']}</td>
+                    <td class="px-4 py-2 text-sm {quantity_class} text-right">{item['quantity']}</td>
+                </tr>
+            '''
+
+        # Return HTML page
+        html = f'''
+        <html>
+        <head>
+            <title>Pantry (Normalized)</title>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+            <script src="https://cdn.tailwindcss.com"></script>
+            <style>
+                body {{
+                    font-family: 'Inter', sans-serif;
+                    background: #f9fafb;
+                }}
+            </style>
+        </head>
+        <body class="p-8">
+            <div class="max-w-4xl mx-auto">
+                <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 mb-4 inline-block">← Back</a>
+
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h1 class="text-2xl font-bold text-gray-900">Pantry Inventory (Normalized)</h1>
+                        <p class="text-sm text-gray-600 mt-1">Merged view of Food Database and Pantry Inventory</p>
+                        <div class="mt-3 flex items-center space-x-4 text-xs">
+                            <div class="flex items-center space-x-2">
+                                <div class="w-4 h-4 bg-red-50 border border-red-200 rounded"></div>
+                                <span class="text-gray-600">Out of stock (0)</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <div class="w-4 h-4 bg-yellow-50 border border-yellow-200 rounded"></div>
+                                <span class="text-gray-600">Low stock (≤ 3)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Food ID</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Food Name</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">Quantity</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {table_rows}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                        <p class="text-xs text-gray-500">
+                            Total items in database: {len(merged_items)} |
+                            Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        '''
+
+        return html
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"<html><body><h1>Error</h1><p>{str(e)}</p><pre>{traceback.format_exc()}</pre></body></html>", 500
+
 # A2A Protocol Endpoints (JSON-RPC 2.0)
 @app.route('/.well-known/agent-card.json', methods=['GET'])
 def agent_card():
@@ -694,45 +1069,42 @@ def a2a_jsonrpc():
 
             print(f"[A2A] 📨 {method} method called with message: {message_text[:80]}...", flush=True)
 
-            # Create or get A2A session
-            # Use a single persistent session for all A2A calls
-            # This makes all A2A interactions visible in the web UI
-            a2a_session_id = "a2a_session"
+            # Create a NEW session for each A2A call
+            # This makes each A2A interaction visible as a separate session in the web UI
+            a2a_session_id = f"a2a_session_{int(datetime.now().timestamp() * 1000)}_{uuid.uuid4().hex[:8]}"
 
-            print(f"[A2A] 📝 Using session ID: {a2a_session_id}", flush=True)
+            print(f"[A2A] 📝 Creating new session ID: {a2a_session_id}", flush=True)
 
-            if a2a_session_id not in sessions:
-                print(f"[A2A] 🆕 Creating new session: {a2a_session_id}", flush=True)
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+            # Always create a new session for each A2A call
+            print(f"[A2A] 🆕 Creating new session: {a2a_session_id}", flush=True)
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
 
-                session_service = InMemorySessionService()
-                artifact_service = InMemoryArtifactService()
+            session_service = InMemorySessionService()
+            artifact_service = InMemoryArtifactService()
 
-                runner = Runner(
-                    app_name=f"restaurant-{agent_name}",
-                    agent=agent_module.root_agent,
-                    artifact_service=artifact_service,
-                    session_service=session_service
+            runner = Runner(
+                app_name=f"restaurant-{agent_name}",
+                agent=agent_module.root_agent,
+                artifact_service=artifact_service,
+                session_service=session_service
+            )
+
+            session = loop.run_until_complete(
+                session_service.create_session(
+                    app_name=runner.app_name,
+                    user_id="a2a_agent"
                 )
+            )
 
-                session = loop.run_until_complete(
-                    session_service.create_session(
-                        app_name=runner.app_name,
-                        user_id="a2a_agent"
-                    )
-                )
-
-                sessions[a2a_session_id] = {
-                    'session': session,
-                    'runner': runner,
-                    'loop': loop,
-                    'history': [],
-                    'created_at': datetime.now().isoformat()
-                }
-                print(f"[A2A] ✅ Session created: {a2a_session_id}, Total sessions: {len(sessions)}", flush=True)
-            else:
-                print(f"[A2A] 🔄 Reusing existing session: {a2a_session_id}", flush=True)
+            sessions[a2a_session_id] = {
+                'session': session,
+                'runner': runner,
+                'loop': loop,
+                'history': [],
+                'created_at': datetime.now().isoformat()
+            }
+            print(f"[A2A] ✅ Session created: {a2a_session_id}, Total sessions: {len(sessions)}", flush=True)
 
             session_data = sessions[a2a_session_id]
             session = session_data['session']

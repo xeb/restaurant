@@ -238,7 +238,7 @@ RECIPES = [
             "2 tsp baking powder",
             "1 tsp salt",
             "4 tbsp butter, melted, plus extra for griddle",
-            "½ cup pure maple syrup",
+            "½ cup maple syrup",
             "1 tsp vanilla extract"
         ],
         "steps": [

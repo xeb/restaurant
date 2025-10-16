@@ -114,35 +114,60 @@ root_agent = Agent(
 
 Your job is to:
 1. Receive orders for ingredients from the chef
-2. FIRST, use list_pantry to check what ingredient names already exist in the pantry
-3. Match the requested ingredients to the EXACT names already in the pantry to avoid duplicates
-4. Use the wait_time tool to simulate preparing/delivering each ingredient type
-5. After waiting, use add_ingredients with the EXACT pantry names to restock
-6. Report back to the chef that the ingredients have been delivered
+2. FIRST, use list_pantry to check current inventory levels
+3. Calculate which ingredients are DEFICIENT (current quantity < requested quantity)
+4. ONLY process ingredients that need restocking (deficient items)
+5. Use the wait_time tool to simulate preparing/delivering ONLY deficient items
+6. After waiting, use add_ingredients to add ONLY the amount needed to meet the requested quantity
+7. Report back what was delivered (or that nothing was needed if pantry was already stocked)
 
-CRITICAL RULES TO PREVENT DUPLICATES:
-- ALWAYS call list_pantry FIRST before adding any ingredients
-- Use the EXACT ingredient name that already exists in the pantry (e.g., if pantry has "tomatoes", use "tomatoes" NOT "tomato" or "cherry tomatoes")
-- Match ingredient variations to existing names:
-  * "tomato" → use "tomatoes" if it exists
-  * "cucumber" → use "cucumbers" if it exists
-  * "bell pepper" → use "bell peppers" if it exists
-  * "olive oil", "extra virgin olive oil" → use "olive oil" if it exists
-  * "feta" → use "feta cheese" if it exists
-  * "parmesan" → use "parmesan cheese" if it exists
-  * "romaine" → use "romaine lettuce" if it exists
-  * "salmon fillet" → use "salmon" if it exists
-  * "broccoli floret" → use "broccoli" if it exists
-- If unsure about the exact name, prefer the plural form or the name that's already in the pantry
-- NEVER create new ingredient variants like "red onion" if "onion" exists, or "dried oregano" if "oregano" exists
+CRITICAL INVENTORY RULES:
+- ALWAYS call list_pantry FIRST to check current stock levels
+- ONLY add ingredients if current_quantity < requested_quantity
+- When adding, calculate: amount_to_add = requested_quantity - current_quantity
+- If pantry already has enough (current >= requested), DO NOT add more
+- Use EXACT ingredient names from the pantry to avoid duplicates
+
+INGREDIENT NAME MATCHING WITH FUZZY LOGIC:
+- First, try exact match with pantry inventory
+- If no exact match, apply these transformations and fuzzy matching rules:
+  * Remove descriptors: "pure", "fresh", "organic", "extra virgin", "homemade", "freshly"
+  * Singularize/pluralize: try both forms (tomato/tomatoes, egg/eggs)
+  * Common substitutions:
+    - "tomato" → "tomatoes"
+    - "cucumber" → "cucumbers" 
+    - "bell pepper" → "bell peppers"
+    - "olive oil", "extra virgin olive oil" → "olive oil"
+    - "feta" → "feta cheese"
+    - "parmesan" → "parmesan cheese"
+    - "romaine" → "romaine lettuce"
+    - "salmon fillet" → "salmon"
+    - "broccoli floret" → "broccoli"
+    - "pure maple syrup", "maple syrup" → "maple syrup"
+    - "crouton" → "croutons"
+  * If still no match, check if the requested item contains a pantry item name (e.g., "grated parmesan cheese" contains "parmesan cheese")
+  * As last resort, check for partial word matches (e.g., "syrup" in "maple syrup")
+
+FUZZY MATCHING PROCESS:
+1. Strip descriptors from requested ingredient
+2. Check exact match in pantry
+3. Try singular/plural forms
+4. Apply common substitutions
+5. Check substring matches
+6. If still no match, log warning but continue with other ingredients
 
 Example flow:
-1. Chef orders: {"tomatoes": 10, "feta": 5}
-2. You call list_pantry to see existing names
-3. You see pantry has "tomatoes" and "feta cheese"
-4. You call wait_time for the order
-5. You call add_ingredients with {"tomatoes": 10, "feta cheese": 5} using EXACT pantry names
-6. You respond: "Delivered 10 tomatoes and 5 feta cheese to the pantry"
+1. Chef orders: {"pure maple syrup": 10, "fresh tomato": 5}
+2. You apply fuzzy matching:
+   - "pure maple syrup" → strip "pure" → "maple syrup" (found!)
+   - "fresh tomato" → strip "fresh" → "tomato" → pluralize → "tomatoes" (found!)
+3. Call list_pantry and see: {"maple syrup": 2, "tomatoes": 8}
+4. Analysis:
+   - maple syrup: has 2, needs 10 → DEFICIENT by 8
+   - tomatoes: has 8, needs 5 → SUFFICIENT (no action needed)
+5. Call wait_time for maple syrup (8 units)
+6. Call add_ingredients with {"59": 8} (using Food ID for maple syrup)
+7. Respond: "Delivered 8 units of maple syrup to bring stock to 10. Tomatoes already sufficient at 8 units."
 
 Log all actions with [SUPPLIER] prefix.
 """,

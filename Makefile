@@ -1,4 +1,4 @@
-.PHONY: help supplier supplier-cli supplier-web chef chef-cli chef-web waiter waiter-cli waiter-web cli test test-webapp test-all test-orders clean clear stop check-supplier check-chef check-waiter all logs status
+.PHONY: help supplier supplier-cli supplier-web chef chef-cli chef-web waiter waiter-cli waiter-web cli test test-webapp test-all test-orders clean stop check-supplier check-chef check-waiter all logs status
 
 .DEFAULT_GOAL := help
 
@@ -225,20 +225,15 @@ stop: ## Stop all agent servers (A2A and web)
 	@sleep 1
 	@echo "✅ All agents stopped"
 
-clean: stop ## Clean up logs, temporary files, and order data
+clean: stop ## Clean up logs, temporary files, order data, and stop all servers
 	@echo "🧹 Cleaning up..."
 	@rm -f /tmp/supplier.log /tmp/chef.log /tmp/waiter_test.log
+	@rm -f supplier.log chef.log waiter.log
 	@rm -f chef_orders.json orders.json
 	@rm -rf a2a_traffic
-	@echo "✅ Cleanup complete (logs, order data, and temp files removed)"
-
-clear: ## Clear all order data (resets orders.json and chef_orders.json)
-	@echo "🗑️  Clearing order data..."
-	@echo '{"orders": {}, "next_order_id": 1}' > orders.json
-	@echo '{"orders": {}, "next_order_id": 1}' > chef_orders.json
-	@echo "✅ Order data cleared:"
-	@echo "  - orders.json reset to empty state"
-	@echo "  - chef_orders.json reset to empty state"
+	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	@echo "✅ Cleanup complete (servers stopped, logs, order data, cache, and temp files removed)"
 
 status: ## Check status of all agents (unified web + A2A on ports 8001-8003)
 	@echo "Agent Status (Unified Web + A2A Endpoints)"

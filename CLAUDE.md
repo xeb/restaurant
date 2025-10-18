@@ -542,24 +542,27 @@ make stop
 
 **Use case**: When you want all agents running without occupying multiple terminal windows.
 
-### Clearing Order Data
+### Cleaning Up
 
-Reset the order tracking systems:
+The `make clean` command performs a complete cleanup:
 
 ```bash
-# Clear all order data
-make clear
+# Clean up everything (stops servers, removes logs, order data, and cache)
+make clean
 ```
 
-This resets:
-- `orders.json` (waiter's customer orders)
-- `chef_orders.json` (chef's order completions)
+This performs:
+- Stops all running agent servers
+- Removes all log files (`*.log`, `/tmp/*.log`)
+- Clears order data (`orders.json`, `chef_orders.json`)
+- Removes A2A traffic logs (`a2a_traffic/`)
+- Deletes Python cache (`__pycache__/`, `*.pyc`)
 
 **When to use**:
 - Before running test suites
 - After testing scenarios
-- When order IDs get too high
-- To start fresh
+- When starting a fresh development session
+- To clean up disk space
 
 ## 📚 Learning with Claude Code
 
@@ -620,8 +623,7 @@ Claude Code can help you understand and use these commands:
 | `make logs` | Tail all agent logs in real-time | Running agents |
 | `make status` | Check all agent statuses | None |
 | `make stop` | Stop all agents | None |
-| `make clean` | Clean logs and temp files | None |
-| `make clear` | Clear all order data | None |
+| `make clean` | Stop servers, clean logs, order data, and cache | None |
 | `make test` | Run all test suites | None |
 | `make test-cli` | Run interactive CLI tests | None |
 | `make test-webapp` | Run webapp tests | None |

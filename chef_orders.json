@@ -1,0 +1,16 @@
+{
+  "orders": {
+    "1": {
+      "order_id": 1,
+      "recipe": "Grilled Salmon with Vegetables",
+      "prep_time_minutes": 10,
+      "cook_time_minutes": 20,
+      "total_time_minutes": 30,
+      "status": "delivered",
+      "accepted_at": "2025-10-18T05:00:35.692717",
+      "completed_at": "2025-10-18T05:00:35.692723",
+      "delivered_at": "2025-10-18T05:03:49.893414"
+    }
+  },
+  "next_order_id": 2
+}

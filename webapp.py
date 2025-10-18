@@ -11,6 +11,7 @@ import logging
 import os
 import sys
 import warnings
+from pathlib import Path
 from flask import Flask, render_template_string, request, jsonify
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
@@ -108,6 +109,19 @@ HTML_TEMPLATE = '''
                             <a href="/data/pantry-normalized" target="_blank">Pantry (Normalized)</a>
                             <a href="/data/orders.json" target="_blank">Waiter Orders</a>
                             <a href="/data/chef_orders.json" target="_blank">Chef Orders</a>
+                        </div>
+                    </div>
+
+                    <!-- A2A Menu -->
+                    <div class="dropdown">
+                        <button class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg font-medium transition-all">
+                            A2A ▾
+                        </button>
+                        <div class="dropdown-content">
+                            <a href="/a2a/architecture" target="_blank">View Architecture</a>
+                            <a href="/a2a/logs/waiter" target="_blank">View Waiter Logs</a>
+                            <a href="/a2a/logs/chef" target="_blank">View Chef Logs</a>
+                            <a href="/a2a/logs/supplier" target="_blank">View Supplier Logs</a>
                         </div>
                     </div>
                 </div>
@@ -1236,6 +1250,400 @@ def a2a_jsonrpc():
         except:
             pass
         return jsonify(response_data)
+
+@app.route('/a2a/architecture')
+def view_architecture():
+    """Display the system architecture diagram."""
+    try:
+        architecture_ascii = """
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│                          RESTAURANT MULTI-AGENT SYSTEM                             │
+│                                                                                    │
+│  ┌──────────────┐         ┌──────────────┐         ┌──────────────┐               │
+│  │    WAITER    │  A2A    │     CHEF     │  A2A    │   SUPPLIER   │               │
+│  │   (Web+A2A)  │────────▶│  (Web+A2A)   │────────▶│  (Web+A2A)   │               │
+│  │  Port 8001   │         │  Port 8002   │         │  Port 8003   │               │
+│  └──┬────────┬──┘         └──┬────────┬──┘         └──────┬───────┘               │
+│     │        │               │        │                   │                       │
+│     │ MCP    │ MCP           │ MCP    │ MCP               │ MCP                   │
+│     ▼        ▼               ▼        ▼                   ▼                       │
+│  ┌─────┐  ┌─────┐     ┌─────────┐ ┌──────────┐    ┌──────────┐                  │
+│  │Order│  │Menu │     │Order Up │ │ Recipes  │    │  Pantry  │                  │
+│  │ MCP │  │ MCP │     │   MCP   │ │   MCP    │    │   MCP    │                  │
+│  └──┬──┘  └─┬───┘     └────┬────┘ └────┬─────┘    └────┬─────┘                  │
+│     │       │              │           │               │                         │
+│     │r/w    │reads         │r/w        │hardcoded      │r/w      reads           │
+│     ▼       ▼              ▼           │               ▼           ▼             │
+│  ┌──────┐ ┌─────┐    ┌─────────┐      │        ┌──────────┐ ┌──────────┐        │
+│  │orders│ │menu │    │  chef   │      │        │  pantry  │ │   food   │        │
+│  │.json │ │.json│    │_orders  │      │        │  .json   │ │  .json   │        │
+│  │      │ │     │    │  .json  │      │        │(Food IDs)│ │(Food DB) │        │
+│  └──────┘ └─────┘    └─────────┘      └───────────────────┘ └──────────┘        │
+│                                                                                    │
+│  Features:                                                                        │
+│  • Unified Web + A2A endpoints on ports 8001-8003                                 │
+│  • A2A sessions visible in browser                                                │
+│  • Food ID system for ingredient tracking                                         │
+│  • Disk-reload for multi-process pantry consistency                               │
+│  • Duration tracking for agent responses                                          │
+│  • Normalized pantry view for debugging                                           │
+└────────────────────────────────────────────────────────────────────────────────────┘
+"""
+
+        html = f"""
+        <html>
+        <head>
+            <title>A2A Architecture</title>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+            <script src="https://cdn.tailwindcss.com"></script>
+            <style>
+                body {{
+                    font-family: 'Inter', sans-serif;
+                    background: #f9fafb;
+                }}
+                .banner-gradient {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }}
+                .dropdown {{ position: relative; display: inline-block; }}
+                .dropdown-content {{ display: none; position: absolute; right: 0; background-color: white; min-width: 200px; box-shadow: 0px 8px 16px rgba(0,0,0,0.1); z-index: 1000; border-radius: 0.5rem; margin-top: 0.125rem; padding-top: 0.25rem; }}
+                .dropdown:hover .dropdown-content {{ display: block; }}
+                .dropdown-content a {{ color: #374151; padding: 12px 16px; text-decoration: none; display: block; transition: background 0.2s; }}
+                .dropdown-content a:hover {{ background-color: #f3f4f6; }}
+            </style>
+        </head>
+        <body class="bg-white text-gray-800">
+            <header class="banner-gradient text-white border-b border-gray-200">
+                <div class="px-8 py-4 flex justify-between items-center">
+                    <div>
+                        <h1 class="text-4xl font-bold tracking-tight">{agent_emoji} Restaurant - {agent_name}</h1>
+                        <p class="text-sm opacity-90 mt-1">Multi-Agent System on port {agent_port}</p>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <!-- Agents Menu -->
+                        <div class="dropdown">
+                            <button class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg font-medium transition-all">
+                                Agents ▾
+                            </button>
+                            <div class="dropdown-content">
+                                <a href="https://waiter.xeb.ai" target="_blank">Waiter</a>
+                                <a href="https://chef.xeb.ai" target="_blank">Chef</a>
+                                <a href="https://supplier.xeb.ai" target="_blank">Supplier</a>
+                            </div>
+                        </div>
+
+                        <!-- Data Menu -->
+                        <div class="dropdown">
+                            <button class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg font-medium transition-all">
+                                Data ▾
+                            </button>
+                            <div class="dropdown-content">
+                                <a href="/data/menu.json" target="_blank">Menu</a>
+                                <a href="/data/food.json" target="_blank">Food Database</a>
+                                <a href="/data/pantry.json" target="_blank">Pantry Inventory</a>
+                                <a href="/data/pantry-normalized" target="_blank">Pantry (Normalized)</a>
+                                <a href="/data/orders.json" target="_blank">Waiter Orders</a>
+                                <a href="/data/chef_orders.json" target="_blank">Chef Orders</a>
+                            </div>
+                        </div>
+
+                        <!-- A2A Menu -->
+                        <div class="dropdown">
+                            <button class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg font-medium transition-all">
+                                A2A ▾
+                            </button>
+                            <div class="dropdown-content">
+                                <a href="/a2a/architecture" target="_blank">View Architecture</a>
+                                <a href="/a2a/logs/waiter" target="_blank">View Waiter Logs</a>
+                                <a href="/a2a/logs/chef" target="_blank">View Chef Logs</a>
+                                <a href="/a2a/logs/supplier" target="_blank">View Supplier Logs</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="p-8">
+                <div class="max-w-7xl mx-auto">
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h1 class="text-2xl font-bold text-gray-900">System Architecture</h1>
+                            <p class="text-sm text-gray-600 mt-1">Agent-to-Agent Communication Flow</p>
+                        </div>
+
+                        <div class="p-6">
+                            <div class="bg-gray-900 text-green-400 p-6 rounded-lg overflow-x-auto">
+                                <pre class="font-mono text-sm">{architecture_ascii}</pre>
+                            </div>
+                        </div>
+
+                        <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                            <h3 class="font-semibold text-gray-900 mb-2">Key Features:</h3>
+                            <ul class="text-sm text-gray-700 space-y-1 list-disc list-inside">
+                                <li>Unified Web + A2A endpoints on ports 8001-8003</li>
+                                <li>A2A sessions visible in browser interface</li>
+                                <li>Food ID system for precise ingredient tracking</li>
+                                <li>Disk-reload for multi-process pantry consistency</li>
+                                <li>Duration tracking for agent responses</li>
+                                <li>Normalized pantry view for debugging</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        return html
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"<html><body><h1>Error</h1><p>{str(e)}</p><pre>{traceback.format_exc()}</pre></body></html>", 500
+
+@app.route('/a2a/logs/<agent_name>')
+def view_a2a_logs(agent_name):
+    """Display A2A traffic logs for a specific agent."""
+    try:
+        # Validate agent name
+        if agent_name not in ['waiter', 'chef', 'supplier']:
+            return f"<html><body><h1>Error</h1><p>Invalid agent name: {agent_name}</p></body></html>", 400
+
+        # Get log files from a2a_traffic directory
+        log_dir = Path("a2a_traffic")
+        if not log_dir.exists():
+            log_files = []
+        else:
+            # Get all log files for this agent
+            pattern = f"{agent_name}_*.json"
+            log_files = sorted(log_dir.glob(pattern), key=lambda x: x.stat().st_mtime, reverse=True)
+
+        # Build file list HTML
+        if not log_files:
+            file_list_html = '<p class="text-gray-500 text-center py-8">No log files found</p>'
+        else:
+            file_items = []
+            for log_file in log_files:
+                # Read log file to get metadata
+                try:
+                    with open(log_file, 'r') as f:
+                        log_data = json.load(f)
+
+                    timestamp = log_data.get('timestamp_human', 'Unknown')
+                    method = log_data.get('request', {}).get('method', 'N/A')
+
+                    file_items.append(f'''
+                        <div class="border border-gray-200 rounded-lg p-4 hover:border-blue-500 cursor-pointer transition-colors" onclick="loadLogFile('{log_file.name}')">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <h4 class="font-medium text-gray-900 text-sm">{log_file.name}</h4>
+                                    <p class="text-xs text-gray-500 mt-1">Method: {method}</p>
+                                    <p class="text-xs text-gray-400">{timestamp}</p>
+                                </div>
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    ''')
+                except Exception:
+                    # Skip files that can't be read
+                    continue
+
+            file_list_html = '\n'.join(file_items)
+
+        html = f"""
+        <html>
+        <head>
+            <title>A2A Logs - {agent_name.capitalize()}</title>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+            <script src="https://cdn.tailwindcss.com"></script>
+            <style>
+                body {{
+                    font-family: 'Inter', sans-serif;
+                    background: #f9fafb;
+                }}
+                .banner-gradient {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }}
+                .dropdown {{ position: relative; display: inline-block; }}
+                .dropdown-content {{ display: none; position: absolute; right: 0; background-color: white; min-width: 200px; box-shadow: 0px 8px 16px rgba(0,0,0,0.1); z-index: 1000; border-radius: 0.5rem; margin-top: 0.125rem; padding-top: 0.25rem; }}
+                .dropdown:hover .dropdown-content {{ display: block; }}
+                .dropdown-content a {{ color: #374151; padding: 12px 16px; text-decoration: none; display: block; transition: background 0.2s; }}
+                .dropdown-content a:hover {{ background-color: #f3f4f6; }}
+            </style>
+        </head>
+        <body class="bg-white text-gray-800">
+            <header class="banner-gradient text-white border-b border-gray-200">
+                <div class="px-8 py-4 flex justify-between items-center">
+                    <div>
+                        <h1 class="text-4xl font-bold tracking-tight">{agent_emoji} Restaurant - {agent_name}</h1>
+                        <p class="text-sm opacity-90 mt-1">Multi-Agent System on port {agent_port}</p>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <!-- Agents Menu -->
+                        <div class="dropdown">
+                            <button class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg font-medium transition-all">
+                                Agents ▾
+                            </button>
+                            <div class="dropdown-content">
+                                <a href="https://waiter.xeb.ai" target="_blank">Waiter</a>
+                                <a href="https://chef.xeb.ai" target="_blank">Chef</a>
+                                <a href="https://supplier.xeb.ai" target="_blank">Supplier</a>
+                            </div>
+                        </div>
+
+                        <!-- Data Menu -->
+                        <div class="dropdown">
+                            <button class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg font-medium transition-all">
+                                Data ▾
+                            </button>
+                            <div class="dropdown-content">
+                                <a href="/data/menu.json" target="_blank">Menu</a>
+                                <a href="/data/food.json" target="_blank">Food Database</a>
+                                <a href="/data/pantry.json" target="_blank">Pantry Inventory</a>
+                                <a href="/data/pantry-normalized" target="_blank">Pantry (Normalized)</a>
+                                <a href="/data/orders.json" target="_blank">Waiter Orders</a>
+                                <a href="/data/chef_orders.json" target="_blank">Chef Orders</a>
+                            </div>
+                        </div>
+
+                        <!-- A2A Menu -->
+                        <div class="dropdown">
+                            <button class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg font-medium transition-all">
+                                A2A ▾
+                            </button>
+                            <div class="dropdown-content">
+                                <a href="/a2a/architecture" target="_blank">View Architecture</a>
+                                <a href="/a2a/logs/waiter" target="_blank">View Waiter Logs</a>
+                                <a href="/a2a/logs/chef" target="_blank">View Chef Logs</a>
+                                <a href="/a2a/logs/supplier" target="_blank">View Supplier Logs</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="p-8">
+                <div class="max-w-7xl mx-auto">
+                    <div class="flex gap-6">
+                        <!-- Left: File List -->
+                        <div class="w-1/3 bg-white rounded-lg shadow-sm border border-gray-200">
+                            <div class="px-6 py-4 border-b border-gray-200">
+                                <h2 class="text-lg font-semibold">{agent_name.capitalize()} A2A Logs</h2>
+                                <p class="text-sm text-gray-600 mt-1">{len(log_files)} log files</p>
+                            </div>
+                            <div class="p-4 overflow-y-auto" style="max-height: calc(100vh - 250px);">
+                                <div class="space-y-2">
+                                    {file_list_html}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Log Content -->
+                        <div class="flex-1 bg-white rounded-lg shadow-sm border border-gray-200">
+                            <div class="px-6 py-4 border-b border-gray-200">
+                                <h2 class="text-lg font-semibold">Log Details</h2>
+                                <p class="text-sm text-gray-600 mt-1">Select a log file to view details</p>
+                            </div>
+                            <div id="logContent" class="p-6 overflow-y-auto" style="max-height: calc(100vh - 250px);">
+                                <div class="text-center text-gray-500 mt-8">
+                                    <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                    <p class="text-sm">No log file selected</p>
+                                    <p class="text-xs text-gray-400 mt-1">Click a log file on the left to view details</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                function loadLogFile(filename) {{
+                    fetch(`/a2a/logs/{agent_name}/${{filename}}`)
+                        .then(response => response.json())
+                        .then(data => {{
+                            const content = document.getElementById('logContent');
+
+                            const requestStr = JSON.stringify(data.request, null, 2);
+                            const responseStr = JSON.stringify(data.response, null, 2);
+
+                            content.innerHTML = `
+                                <div class="space-y-4">
+                                    <div>
+                                        <h3 class="font-semibold text-gray-900 mb-2">Metadata</h3>
+                                        <div class="bg-gray-50 p-4 rounded-lg text-sm">
+                                            <div class="grid grid-cols-2 gap-2">
+                                                <div><span class="font-medium">File:</span> ${{filename}}</div>
+                                                <div><span class="font-medium">Timestamp:</span> ${{data.timestamp_human}}</div>
+                                                <div><span class="font-medium">Agent:</span> ${{data.agent}}</div>
+                                                <div><span class="font-medium">Method:</span> ${{data.request.method || 'N/A'}}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <h3 class="font-semibold text-gray-900 mb-2">Request</h3>
+                                        <div class="bg-gray-900 text-green-400 p-4 rounded-lg overflow-auto">
+                                            <pre class="font-mono text-xs whitespace-pre-wrap break-all">${{requestStr}}</pre>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <h3 class="font-semibold text-gray-900 mb-2">Response</h3>
+                                        <div class="bg-gray-900 text-blue-400 p-4 rounded-lg overflow-auto">
+                                            <pre class="font-mono text-xs whitespace-pre-wrap break-all">${{responseStr}}</pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }})
+                        .catch(error => {{
+                            console.error('Error loading log file:', error);
+                            document.getElementById('logContent').innerHTML = `
+                                <div class="text-center text-red-500 mt-8">
+                                    <p>Error loading log file</p>
+                                    <p class="text-sm mt-2">${{error.message}}</p>
+                                </div>
+                            `;
+                        }});
+                }}
+            </script>
+        </body>
+        </html>
+        """
+
+        return html
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"<html><body><h1>Error</h1><p>{str(e)}</p><pre>{traceback.format_exc()}</pre></body></html>", 500
+
+@app.route('/a2a/logs/<agent_name>/<filename>')
+def get_log_file(agent_name, filename):
+    """Return the contents of a specific log file."""
+    try:
+        # Validate agent name
+        if agent_name not in ['waiter', 'chef', 'supplier']:
+            return jsonify({'error': 'Invalid agent name'}), 400
+
+        # Security: ensure filename matches expected pattern
+        if not filename.startswith(f"{agent_name}_") or not filename.endswith('.json'):
+            return jsonify({'error': 'Invalid filename'}), 400
+
+        log_file = Path("a2a_traffic") / filename
+
+        if not log_file.exists():
+            return jsonify({'error': 'Log file not found'}), 404
+
+        with open(log_file, 'r') as f:
+            log_data = json.load(f)
+
+        return jsonify(log_data)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Restaurant Multi-Agent Web Interface')

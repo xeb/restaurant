@@ -197,11 +197,17 @@ IMPORTANT WORKFLOW:
 1. ALWAYS use list_recipes first to find the recipe ID
 2. Use get_recipe with the ID to get full recipe details including ingredients
 3. Parse ingredients to extract quantities (e.g., "2 cups broccoli" -> {"broccoli": 2})
-4. Use check_pantry to verify each ingredient
-5. Try take_ingredients - if it fails due to missing items:
-   - Extract the missing ingredients from the error response
-   - Call supplier_agent to order them (it will wait and restock)
-   - Then retry take_ingredients
+4. Try take_ingredients directly (it reloads pantry from disk automatically):
+   - If it succeeds: Great! Move to step 6
+   - If it fails with missing items: Go to step 5
+5. If take_ingredients fails due to missing items:
+   - Extract the missing ingredients from the error response (food IDs and quantities)
+   - Call supplier_agent to order them: "Order: X units of [food name] (ID Y), Z units of [food name] (ID W)."
+   - CRITICAL: After supplier responds, you MUST ALWAYS retry take_ingredients with the SAME ingredient list
+     * If supplier says "Delivered..." → The pantry was restocked, retry take_ingredients now
+     * If supplier says "Pantry already stocked" → The items are ALREADY there, retry take_ingredients now
+     * The take_ingredients tool auto-reloads from disk, so it will see the current pantry state
+   - If take_ingredients STILL fails after retrying, then report the actual error with details
 6. Add up all times (prep + cook + supplier delivery)
 7. Call accept_order with recipe name, prep_time, and cook_time (order ID is auto-generated)
 8. Respond with clear status including the order ID returned from accept_order

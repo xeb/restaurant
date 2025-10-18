@@ -69,7 +69,17 @@
       "status": "ready",
       "accepted_at": "2025-10-17T20:32:52.800424",
       "completed_at": "2025-10-17T20:32:52.800431"
+    },
+    "8": {
+      "order_id": 8,
+      "recipe": "Pancakes",
+      "prep_time_minutes": 10,
+      "cook_time_minutes": 15,
+      "total_time_minutes": 25,
+      "status": "ready",
+      "accepted_at": "2025-10-18T04:38:04.065592",
+      "completed_at": "2025-10-18T04:38:04.065608"
     }
   },
-  "next_order_id": 8
+  "next_order_id": 9
 }

@@ -46,20 +46,26 @@ Check which agents are currently running
 Show me how to test the system with a sample order
 ```
 
-**Manual startup process:**
+**Manual startup process (Unified Web + A2A):**
 
 ```bash
-# Terminal 1: Start supplier A2A server
-make supplier-cli
+# Terminal 1: Start supplier (web + A2A on port 8003)
+make supplier
 
-# Terminal 2: Start chef A2A server
-make chef-cli
+# Terminal 2: Start chef (web + A2A on port 8002)
+make chef
 
-# Terminal 3: Start waiter web interface
-make waiter-web
+# Terminal 3: Start waiter (web + A2A on port 8001)
+make waiter
 
-# Then open http://localhost:5001 in your browser
+# Then open http://localhost:8001 in your browser
 ```
+
+**Key Feature**: All agents now expose **both** web UI and A2A protocol on the same port!
+- Browser sessions and A2A sessions are unified
+- You can chat via web UI while agents communicate via A2A
+- All sessions visible in the web interface
+- Ports: 8001 (waiter), 8002 (chef), 8003 (supplier)
 
 ### 3. Debugging Issues
 
@@ -129,29 +135,36 @@ When working with Claude Code, you'll frequently reference these files:
 
 ### Agent Files
 
-- `waiter_standalone.py` - Standalone waiter agent for webapp (line 28-53: instructions)
-- `chef/agent.py` - Chef agent definition (line 116-156: instructions)
-- `supplier/agent.py` - Supplier agent definition (line 98-123: instructions)
+- `waiter/agent.py` - Waiter agent definition (line 115-207: instructions)
+- `chef/agent.py` - Chef agent definition (line 184-227: instructions)
+- `supplier/agent.py` - Supplier agent definition (line 113-173: instructions)
+
+All agents use the **Gemini 2.5 Flash** model (`gemini-2.5-flash`)
 
 ### MCP Servers
 
-- `pantry_mcp_server.py` - Shared inventory management
-- `chef/recipes_mcp_server.py` - Recipe database
-- `orders_mcp_server.py` - Customer orders tracking (if implemented)
+- `pantry_mcp_server.py` - Shared inventory management (Food IDs, disk-reload support)
+- `chef/recipes_mcp_server.py` - Recipe database (hardcoded recipes)
+- `orders_mcp_server.py` - Customer orders tracking (waiter's order management)
+- `order_up_mcp_server.py` - Chef's order completion tracking (auto-incrementing IDs)
+- `menu_mcp_server.py` - Artisanal menu descriptions for customers
 
 ### A2A Servers
 
-- `supplier/a2a_server.py` - Supplier A2A server (port 8003)
-- `chef/a2a_server.py` - Chef A2A server (port 8002)
-- `waiter/a2a_server.py` - Waiter A2A server (port 8001)
+- `supplier/a2a_server.py` - Supplier A2A server (port 8003, legacy standalone)
+- `chef/a2a_server.py` - Chef A2A server (port 8002, legacy standalone)
+- `waiter/a2a_server.py` - Waiter A2A server (port 8001, legacy standalone)
+- `a2a_logging.py` - A2A traffic logging utility (logs all JSON-RPC requests/responses to `a2a_traffic/` directory)
 
 ### Web Interface
 
 - `webapp.py` - Flask web interface for all agents
+- **Unified Architecture**: Web UI (GET) + A2A protocol (POST) on the same port!
 - Port allocation:
-  - Waiter Web: 5001
-  - Chef Web: 5002
-  - Supplier Web: 5003
+  - Waiter: 8001 (unified web + A2A)
+  - Chef: 8002 (unified web + A2A)
+  - Supplier: 8003 (unified web + A2A)
+- Features: Session management, tool call inspection, A2A session visibility, duration tracking
 
 ### Build & Test
 
@@ -240,6 +253,162 @@ Add a new button to the web UI to clear the chat history
 Show tool call timestamps in the web interface
 ```
 
+### 6. Working with the Menu System
+
+The waiter has access to an artisanal menu via the Menu MCP server:
+
+```
+Show me all menu items with dietary information
+```
+
+```
+Add a new vegan dish to menu.json
+```
+
+```
+How does the waiter use the menu tools to answer customer questions?
+```
+
+**Menu MCP Tools**:
+- `list_menu(category)` - Browse menu by category
+- `get_menu_item(item_name)` - Get detailed item info
+- `list_categories()` - Get all categories
+- `search_menu(query)` - Search by keyword (e.g., "vegan")
+
+**Example interaction**:
+```
+Customer: What vegan options do you have?
+
+Waiter: [Calls search_menu(query="vegan")]
+        We have several delicious vegan options:
+        - Greek Salad (Mediterranean delight...)
+        - Vegetable Stir-Fry (Asian-inspired...)
+        [Shows artisanal descriptions]
+```
+
+## 🔍 A2A Traffic Logging
+
+The project includes a powerful A2A traffic logging system for debugging and analysis.
+
+### Logging Feature
+
+**File**: `a2a_logging.py`
+
+This utility logs all A2A JSON-RPC requests and responses to the `a2a_traffic/` directory.
+
+### How to Use
+
+1. **Automatic Logging**: When using standalone A2A servers with the middleware:
+   ```python
+   from a2a_logging import A2ALoggingMiddleware
+
+   # Add to your A2A app
+   a2a_app.add_middleware(A2ALoggingMiddleware, agent_name="chef")
+   ```
+
+2. **Manual Logging**: Call the logging function directly:
+   ```python
+   from a2a_logging import log_a2a_traffic
+
+   log_a2a_traffic("waiter", request_data, response_data)
+   ```
+
+3. **View Logs**: Each A2A call creates a timestamped JSON file:
+   ```bash
+   ls a2a_traffic/
+   # chef_1234567890123456.json
+   # waiter_1234567890234567.json
+   ```
+
+### Log File Format
+
+Each log file contains:
+```json
+{
+  "timestamp": 1234567890.123456,
+  "timestamp_human": "2024-01-15 10:30:45",
+  "agent": "chef",
+  "request": {
+    "jsonrpc": "2.0",
+    "method": "invoke",
+    "params": {...},
+    "id": 1
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "result": {...},
+    "id": 1
+  }
+}
+```
+
+### Debugging with A2A Logs
+
+```
+User: Show me the A2A traffic logs for the last order
+
+Claude: Let me check the a2a_traffic/ directory...
+[Reads recent log files]
+[Shows request/response pairs with timing information]
+```
+
+### Clean Up Logs
+
+```bash
+# Remove all A2A traffic logs
+make clean
+
+# Or manually
+rm -rf a2a_traffic/
+```
+
+## 📦 Order Delivery Tracking
+
+The system supports tracking when orders are delivered to customers.
+
+### The `mark_order_delivered` Feature
+
+**Location**: `order_up_mcp_server.py:164-197`
+
+This MCP tool allows the chef to mark orders as "delivered" once the waiter notifies them.
+
+### How It Works
+
+1. **Waiter serves the order** to the customer
+2. **Waiter notifies chef**: "Order #3 has been delivered"
+3. **Chef calls** `mark_order_delivered(order_id=3)`
+4. **Status updates** from "ready" → "delivered"
+
+### Chef Agent Instructions
+
+The chef agent (chef/agent.py:213-214) includes instructions:
+```
+When the waiter notifies you that an order has been served/delivered:
+1. Extract the order_id from the message
+2. Use mark_order_delivered(order_id) to update the status
+3. Respond with confirmation
+```
+
+### Example Interaction
+
+```
+Waiter: Order #5 has been served to the customer
+
+Chef: [Calls mark_order_delivered(order_id=5)]
+      Order #5 marked as delivered. Thanks for letting me know!
+```
+
+### Using with Claude Code
+
+```
+User: How does the order delivery tracking work?
+
+Claude: The system tracks order delivery in two stages:
+1. Chef marks orders as "ready" using accept_order()
+2. Waiter marks orders as "delivered" by notifying the chef
+   [Explains the mark_order_delivered flow]
+```
+
 ## 📊 Architecture Deep Dives
 
 Ask Claude Code to explain specific architectural patterns:
@@ -265,9 +434,9 @@ The waiter can't connect to the chef agent, show me the connection code
 ```
 
 **Claude Code will point you to:**
-- `waiter_standalone.py:14-17` - RemoteA2aAgent connection
+- `waiter/agent.py:23-34` - RemoteA2aAgent connection to chef
 - Port configuration in Makefile
-- Agent card endpoint verification
+- Agent card endpoint verification (http://localhost:8002/.well-known/agent-card.json)
 
 ### Missing Ingredients Flow
 
@@ -320,6 +489,78 @@ Create a dashboard showing agent response times
 Build a new MCP server for managing table reservations
 ```
 
+## 🛠️ Development Mode Features
+
+### Auto-Reload with `-dev` Commands
+
+For active development, use the `-dev` variants of the CLI commands:
+
+```bash
+# Terminal 1: Supplier with auto-reload
+make supplier-cli-dev
+
+# Terminal 2: Chef with auto-reload
+make chef-cli-dev
+
+# Terminal 3: Waiter with auto-reload
+make waiter-cli-dev
+```
+
+**Benefits**:
+- **Automatic reloading** when you edit agent files
+- **Faster iteration** during development
+- **Powered by uvicorn** with `--reload` flag
+
+**When to use**:
+- Developing new agent instructions
+- Testing tool integrations
+- Debugging A2A communication
+- Refactoring agent code
+
+### Background Execution with `make all`
+
+Start all agents in the background with logging:
+
+```bash
+# Start all agents at once
+make all
+
+# View combined logs
+make logs
+
+# Check status
+make status
+
+# Stop all agents
+make stop
+```
+
+**Log files created**:
+- `supplier.log` - Supplier agent output
+- `chef.log` - Chef agent output
+- `waiter.log` - Waiter agent output
+
+**Use case**: When you want all agents running without occupying multiple terminal windows.
+
+### Clearing Order Data
+
+Reset the order tracking systems:
+
+```bash
+# Clear all order data
+make clear
+```
+
+This resets:
+- `orders.json` (waiter's customer orders)
+- `chef_orders.json` (chef's order completions)
+
+**When to use**:
+- Before running test suites
+- After testing scenarios
+- When order IDs get too high
+- To start fresh
+
 ## 📚 Learning with Claude Code
 
 ### Understanding ADK Concepts
@@ -362,17 +603,28 @@ Claude Code can help you understand and use these commands:
 
 | Command | Purpose | Dependencies |
 |---------|---------|--------------|
+| `make supplier` | Start supplier (defaults to web, port 8003) | None |
+| `make chef` | Start chef (defaults to web, port 8002) | Supplier |
+| `make waiter` | Start waiter (defaults to web, port 8001) | Chef, Supplier |
 | `make supplier-cli` | Start supplier A2A server (8003) | None |
 | `make chef-cli` | Start chef A2A server (8002) | Supplier |
 | `make waiter-cli` | Start waiter A2A server (8001) | Chef, Supplier |
-| `make supplier-web` | Start supplier web UI (5003) | None |
-| `make chef-web` | Start chef web UI (5002) | Supplier (CLI) |
-| `make waiter-web` | Start waiter web UI (5001) | Chef (CLI), Supplier (CLI) |
+| `make supplier-cli-dev` | Start supplier A2A with auto-reload | None |
+| `make chef-cli-dev` | Start chef A2A with auto-reload | Supplier |
+| `make waiter-cli-dev` | Start waiter A2A with auto-reload | Chef, Supplier |
+| `make supplier-web` | Start supplier unified web+A2A (8003) | None |
+| `make chef-web` | Start chef unified web+A2A (8002) | Supplier |
+| `make waiter-web` | Start waiter unified web+A2A (8001) | Chef, Supplier |
 | `make cli` | Interactive CLI for any agent | At least one agent running |
+| `make all` | Start all agents in background | None |
+| `make logs` | Tail all agent logs in real-time | Running agents |
 | `make status` | Check all agent statuses | None |
 | `make stop` | Stop all agents | None |
 | `make clean` | Clean logs and temp files | None |
+| `make clear` | Clear all order data | None |
 | `make test` | Run all test suites | None |
+| `make test-cli` | Run interactive CLI tests | None |
+| `make test-webapp` | Run webapp tests | None |
 
 ## 💡 Tips for Working with Claude Code
 
@@ -394,8 +646,8 @@ using prep time. Fix this.
 
 Claude Code works well with specific references:
 ```
-In waiter_standalone.py:42-45, update the example interaction to include
-asking for the customer's name
+In waiter/agent.py:177-200, update the example interaction to include
+additional customer greeting variations
 ```
 
 ### 3. Ask for Explanations First
@@ -452,11 +704,11 @@ Claude: I'll help you test the new recipe...
 ```
 User: The waiter web interface shows "chef_agent" tool failed
 
-Claude: Let me check the A2A connection in waiter_standalone.py:14-17...
+Claude: Let me check the A2A connection in waiter/agent.py:23-34...
 [Examines connection code]
 The issue is the chef A2A server needs to be running. Let me check:
 [Runs make status]
-Chef agent is not running. Start it with: make chef-cli
+Chef agent is not running. Start it with: make chef
 
 User: Started it, still not working
 

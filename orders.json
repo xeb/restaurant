@@ -62,7 +62,16 @@
             "status": "READY",
             "created_at": "2025-10-17T20:32:56.366931",
             "updated_at": "2025-10-17T20:32:58.658326"
+        },
+        "8": {
+            "order_id": 8,
+            "name": "Mark",
+            "order_details": "Pancakes",
+            "estimated_wait_time": "28 minutes",
+            "status": "READY",
+            "created_at": "2025-10-18T04:38:06.869777",
+            "updated_at": "2025-10-18T04:38:09.291455"
         }
     },
-    "next_order_id": 8
+    "next_order_id": 9
 }

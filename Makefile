@@ -225,11 +225,12 @@ stop: ## Stop all agent servers (A2A and web)
 	@sleep 1
 	@echo "✅ All agents stopped"
 
-clean: stop ## Clean up logs and temporary files
+clean: stop ## Clean up logs, temporary files, and order data
 	@echo "🧹 Cleaning up..."
 	@rm -f /tmp/supplier.log /tmp/chef.log /tmp/waiter_test.log
+	@rm -f chef_orders.json orders.json
 	@rm -rf a2a_traffic
-	@echo "✅ Cleanup complete"
+	@echo "✅ Cleanup complete (logs, order data, and temp files removed)"
 
 clear: ## Clear all order data (resets orders.json and chef_orders.json)
 	@echo "🗑️  Clearing order data..."

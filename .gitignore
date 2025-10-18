@@ -6,3 +6,4 @@ adk-*.txt
 adk-*
 venv/
 *.log
+a2a_traffic/

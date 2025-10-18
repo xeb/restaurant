@@ -21,6 +21,7 @@ import uuid
 from datetime import datetime
 import concurrent.futures
 import markdown
+from a2a_logging import log_a2a_traffic
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
@@ -1034,9 +1035,13 @@ def agent_card():
 @app.route('/', methods=['POST'])
 def a2a_jsonrpc():
     """Handle A2A JSON-RPC 2.0 requests."""
+    request_data = None
+    response_data = None
+
     try:
         print(f"\n[A2A] ========== POST REQUEST RECEIVED ==========", flush=True)
         data = request.get_json()
+        request_data = data  # Store for logging
         print(f"[A2A] Request data type: {type(data)}", flush=True)
         print(f"[A2A] Request data keys: {data.keys() if isinstance(data, dict) else 'N/A'}", flush=True)
         print(f"[A2A] Full request data: {data}", flush=True)
@@ -1045,11 +1050,17 @@ def a2a_jsonrpc():
         if not isinstance(data, dict) or 'jsonrpc' not in data:
             # Not a JSON-RPC request, return error
             print(f"[A2A] ❌ Not a valid JSON-RPC request (missing 'jsonrpc' field)", flush=True)
-            return jsonify({
+            response_data = {
                 'jsonrpc': '2.0',
                 'error': {'code': -32600, 'message': 'Invalid Request'},
                 'id': data.get('id') if isinstance(data, dict) else None
-            })
+            }
+            # Log the failed request
+            try:
+                log_a2a_traffic(agent_type, request_data, response_data)
+            except:
+                pass
+            return jsonify(response_data)
 
         method = data.get('method')
         params = data.get('params', {})
@@ -1126,11 +1137,17 @@ def a2a_jsonrpc():
                 result = future.result(timeout=120)
 
             if 'error' in result:
-                return jsonify({
+                response_data = {
                     'jsonrpc': '2.0',
                     'error': {'code': -32603, 'message': result['error']},
                     'id': request_id
-                })
+                }
+                # Log the error response
+                try:
+                    log_a2a_traffic(agent_type, request_data, response_data)
+                except:
+                    pass
+                return jsonify(response_data)
 
             print(f"[A2A] ✅ Agent finished, response: {result.get('response', '')[:80]}...", flush=True)
 
@@ -1183,23 +1200,42 @@ def a2a_jsonrpc():
                     'id': request_id
                 }
 
+            # Log A2A traffic
+            try:
+                log_a2a_traffic(agent_type, request_data, response_data)
+            except Exception as log_error:
+                print(f"[A2A] ⚠️  Failed to log A2A traffic: {log_error}", flush=True)
+
             return jsonify(response_data)
 
         # Unknown method
-        return jsonify({
+        response_data = {
             'jsonrpc': '2.0',
             'error': {'code': -32601, 'message': 'Method not found'},
             'id': request_id
-        })
+        }
+        # Log the error response
+        try:
+            log_a2a_traffic(agent_type, request_data, response_data)
+        except:
+            pass
+        return jsonify(response_data)
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({
+        response_data = {
             'jsonrpc': '2.0',
             'error': {'code': -32603, 'message': str(e)},
             'id': request_id if 'request_id' in locals() else None
-        })
+        }
+        # Log the error response
+        try:
+            if request_data:  # Only log if we captured request data
+                log_a2a_traffic(agent_type, request_data, response_data)
+        except:
+            pass
+        return jsonify(response_data)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Restaurant Multi-Agent Web Interface')

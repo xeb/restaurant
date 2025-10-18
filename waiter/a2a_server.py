@@ -15,9 +15,13 @@ Exposes the waiter agent via JSON-RPC A2A protocol on port 8001.
 
 import io
 import sys
+import os
 import warnings
 import logging
 from contextlib import redirect_stdout, redirect_stderr
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Suppress warnings from Google ADK and GenAI
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -34,6 +38,7 @@ from google.adk import Agent
 from google.adk.agents.remote_a2a_agent import RemoteA2aAgent
 from google.adk.tools.agent_tool import AgentTool
 from google.adk.a2a.utils.agent_to_a2a import to_a2a
+from a2a_logging import A2ALoggingMiddleware
 
 try:
     from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset as McpToolset
@@ -184,6 +189,10 @@ a2a_app = to_a2a(
     root_agent,
     port=8001,
 )
+
+# Add logging middleware
+a2a_app.add_middleware(A2ALoggingMiddleware, agent_name="waiter")
+print("[WAITER A2A] ✅ A2A traffic logging enabled")
 
 print("[WAITER A2A] Server configured on port 8001")
 print("[WAITER A2A] Agent card will be available at: http://localhost:8001/.well-known/agent-card.json")

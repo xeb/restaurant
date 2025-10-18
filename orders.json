@@ -26,7 +26,43 @@
             "status": "READY",
             "created_at": "2025-10-15T14:36:57.224009",
             "updated_at": "2025-10-15T14:36:59.043319"
+        },
+        "4": {
+            "order_id": 4,
+            "name": "Bill",
+            "order_details": "Greek Salad",
+            "estimated_wait_time": "18 minutes",
+            "status": "READY",
+            "created_at": "2025-10-16T05:44:44.662077",
+            "updated_at": "2025-10-16T05:44:46.977667"
+        },
+        "5": {
+            "order_id": 5,
+            "name": "Bob",
+            "order_details": "Greek Salad",
+            "estimated_wait_time": "18 minutes",
+            "status": "READY",
+            "created_at": "2025-10-17T18:00:40.566777",
+            "updated_at": "2025-10-17T18:00:42.471338"
+        },
+        "6": {
+            "order_id": 6,
+            "name": "Alice",
+            "order_details": "Grilled Salmon",
+            "estimated_wait_time": "33 minutes",
+            "status": "READY",
+            "created_at": "2025-10-17T18:02:12.598436",
+            "updated_at": "2025-10-17T18:02:15.662453"
+        },
+        "7": {
+            "order_id": 7,
+            "name": "Charlie",
+            "order_details": "Caesar Salad",
+            "estimated_wait_time": "28 minutes",
+            "status": "READY",
+            "created_at": "2025-10-17T20:32:56.366931",
+            "updated_at": "2025-10-17T20:32:58.658326"
         }
     },
-    "next_order_id": 4
+    "next_order_id": 8
 }

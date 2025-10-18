@@ -13,8 +13,15 @@
 Exposes the chef agent via JSON-RPC A2A protocol on port 8002.
 """
 
+import sys
+import os
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from google.adk.a2a.utils.agent_to_a2a import to_a2a
 from agent import root_agent
+from a2a_logging import A2ALoggingMiddleware
 
 print("[CHEF A2A] Starting chef agent server...")
 
@@ -23,6 +30,10 @@ a2a_app = to_a2a(
     root_agent,
     port=8002,
 )
+
+# Add logging middleware
+a2a_app.add_middleware(A2ALoggingMiddleware, agent_name="chef")
+print("[CHEF A2A] ✅ A2A traffic logging enabled")
 
 print("[CHEF A2A] Server configured on port 8002")
 print("[CHEF A2A] Agent card will be available at: http://localhost:8002/.well-known/agent-card.json")
